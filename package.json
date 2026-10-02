@@ -1,0 +1,1 @@
+{"name":"zhang-academic-site","private":true,"type":"module","scripts":{"build":"node build.mjs","dev":"node preview.cjs","test":"node --test tests/server.test.mjs","db:generate":"drizzle-kit generate"},"devDependencies":{"drizzle-kit":"^0.31.4","drizzle-orm":"^0.44.5"}}
