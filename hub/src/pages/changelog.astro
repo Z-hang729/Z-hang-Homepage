@@ -1,0 +1,5 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {changelog,formatDate} from '../lib/site';
+---
+<BaseLayout title="Changelog"><div class="container"><header class="page-intro"><p class="eyebrow">THE GARDEN GROWS</p><h1>Changelog.</h1><p class="intro-description">Small changes in the way this academic home works.</p></header><div class="changelog-list">{changelog.map(item=><article class="changelog-item"><time datetime={item.date}>{formatDate(item.date)}</time><div><h2>{item.title}</h2><p>{item.description}</p></div></article>)}</div></div></BaseLayout>

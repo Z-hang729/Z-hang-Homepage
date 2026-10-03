@@ -1,0 +1,7 @@
+---
+import { url } from '../lib/site';
+interface Props { href: string; title: string; description?: string; format?: string; license?: string; }
+const { href, title, description, format, license } = Astro.props;
+---
+<a class="resource-card" href={url(href)} rel="noopener noreferrer"><span class="resource-icon" aria-hidden="true">◫</span><span><strong>{title}</strong>{description && <small>{description}</small>}{(format || license) && <small>{[format, license].filter(Boolean).join(' · ')}</small>}</span><span aria-hidden="true">↗</span></a>
+<style>.resource-card{display:flex;align-items:center;gap:1rem;padding:1rem 1.2rem;margin:1rem 0;border:1px solid var(--border,#dde5e8);border-radius:10px;text-decoration:none}.resource-card>span:nth-child(2){flex:1}.resource-card strong,.resource-card small{display:block}.resource-card small{color:var(--muted,#667085);margin-top:.25rem}.resource-icon{font-size:1.5rem;color:var(--accent,#3388a8)}</style>

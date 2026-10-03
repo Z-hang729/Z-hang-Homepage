@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="600" viewBox="0 0 960 600" role="img" aria-labelledby="title desc">
+<title id="title">Solar image study - schematic</title><desc id="desc">An original vector illustration of an image registration field with solar-style curves and a highlighted square; no measured observations.</desc>
+<defs><pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#b5cbc7" stroke-width=".7" opacity=".35"/></pattern><radialGradient id="disc"><stop stop-color="#eee7d3"/><stop offset="1" stop-color="#d8c6a5"/></radialGradient><clipPath id="circle"><circle cx="480" cy="302" r="212"/></clipPath></defs>
+<rect width="960" height="600" fill="#ecf0e9"/><rect width="960" height="600" fill="url(#grid)"/>
+<circle cx="480" cy="302" r="239" fill="none" stroke="#9fb9b3" stroke-width=".8" stroke-dasharray="4 7"/>
+<circle cx="480" cy="302" r="212" fill="url(#disc)" stroke="#b6a584"/>
+<g clip-path="url(#circle)" fill="none" stroke="#b38b58" opacity=".45"><path d="M245 213C330 80 620 90 710 214M240 269C320 149 647 139 720 280M254 331C352 210 614 213 715 341M270 395C365 280 616 285 704 406M302 448C381 351 586 350 677 467"/><path d="M351 63C228 221 260 406 387 537M433 62C338 199 347 424 444 539M525 65C457 186 465 434 533 543M610 98C578 228 582 400 616 509"/></g>
+<g fill="none" stroke="#286b70"><rect x="457" y="221" width="113" height="113" stroke-width="2"/><rect x="470" y="211" width="113" height="113" stroke-width="1" stroke-dasharray="5 4"/><path d="M594 272H655M655 272l-8-5m8 5-8 5M514 350v46M514 396l-5-8m5 8 5-8" stroke-width="1.5"/><path d="M400 296c22-43 43-41 62-22s32 30 49 4s32-29 47-1s31 23 50-13" stroke-width="2" opacity=".8"/></g>
+<circle cx="480" cy="302" r="3" fill="#286b70"/><path d="M480 273v-25M452 302h-25" stroke="#286b70" stroke-width=".8"/>
+<g font-family="Arial,sans-serif" fill="#385b60"><text x="40" y="42" font-size="12" letter-spacing="3">SOLAR IMAGE STUDY</text><text x="40" y="566" font-size="11" letter-spacing="2">SCHEMATIC / DEMO</text><text x="760" y="566" font-size="11">not observational data</text><text x="664" y="276" font-size="11">x shift</text><text x="529" y="385" font-size="11">y shift</text><text x="603" y="202" font-size="11">moving frame</text><path d="M595 207l-12 9" stroke="#385b60" stroke-width=".8"/></g>
+</svg>

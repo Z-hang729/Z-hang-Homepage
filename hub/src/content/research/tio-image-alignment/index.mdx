@@ -1,0 +1,106 @@
+---
+title: TiO Solar Image Alignment
+description: A demonstration research notebook for registering high-resolution solar images and documenting scientific checks.
+date: 2026-09-10
+updated: 2026-10-02
+status: Planning
+tags: [Solar Physics, Image Processing, FITS, Python, IDL]
+featured: true
+demo: true
+cover: /images/solar-study.svg
+attachments:
+  - title: Demonstration handout — archive and notation
+    url: /documents/demo-handout.pdf
+    type: pdf
+references:
+  - title: NumPy — Discrete Fourier Transform documentation
+    url: https://numpy.org/doc/stable/reference/routines.fft.html
+  - title: Astropy — FITS file handling documentation
+    url: https://docs.astropy.org/en/stable/io/fits/index.html
+---
+
+import Figure from '../../../components/Figure.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Overview
+
+This **Demo** page is a working template for a future TiO image-alignment project. It shows how a scientific question, method, figures, code, references, and a dated log fit together. No real observation or achieved registration accuracy is claimed.
+
+## Research question
+
+How can a sequence of images be brought into a common reference frame while preserving structures that evolve physically? A useful first step is rigid translation. Residual local distortion requires a separate model and independent validation.
+
+## Background
+
+图像配准中的位移、太阳结构的真实运动与大气引起的形变不能直接等同。首先记录曝光时间、像元尺度、观测时间和标定信息，再比较配准前后数据。Here, pixel shifts are in **array order `(y, x)`**; physical coordinates need a separate WCS conversion.
+
+## Method
+
+For a reference image $R$ and moving image $M$, form the normalized cross-power spectrum:
+
+$$
+C=\mathcal{F}^{-1}\left[\frac{\mathcal{F}(R)\,\overline{\mathcal{F}(M)}}{\left|\mathcal{F}(R)\,\overline{\mathcal{F}(M)}\right|+\epsilon}\right].
+$$
+
+The peak estimates the translation to **apply to the moving image**, under a periodic boundary model. Subtracting the mean and applying a window can reduce edge effects; a mask, padding, or a different estimator may be needed for cropped or missing data.
+
+<Callout title="Check the shift sign">
+If a moving feature is displaced seven pixels to the right, the alignment shift should be seven pixels to the left. Test this convention with synthetic data before processing observations.
+</Callout>
+
+### Minimal integer-shift experiment
+
+```python
+import numpy as np
+
+def alignment_shift(reference, moving):
+    """Return the circular integer shift to apply, in (y, x) order."""
+    if reference.shape != moving.shape or reference.ndim != 2:
+        raise ValueError("Expected two 2-D images with the same shape")
+    a = np.asarray(reference, dtype=float) - np.mean(reference)
+    b = np.asarray(moving, dtype=float) - np.mean(moving)
+    if not np.isfinite(a).all() or not np.isfinite(b).all():
+        raise ValueError("Handle missing pixels before registration")
+    if np.std(a) == 0 or np.std(b) == 0:
+        raise ValueError("A constant image has no identifiable shift")
+    cross = np.fft.fft2(a) * np.conj(np.fft.fft2(b))
+    amplitude = np.abs(cross)
+    normalized = np.divide(cross, amplitude,
+                           out=np.zeros_like(cross), where=amplitude > 0)
+    correlation = np.fft.ifft2(normalized).real
+    shift = np.array(np.unravel_index(correlation.argmax(), a.shape))
+    shape = np.array(a.shape)
+    return np.where(shift > shape // 2, shift - shape, shift)
+
+rng = np.random.default_rng(42)
+reference = rng.normal(size=(64, 64))
+moving = np.roll(reference, (3, 7), axis=(0, 1))
+assert np.array_equal(alignment_shift(reference, moving), [-3, -7])
+```
+
+This is a teaching example for integer shifts. It does not estimate subpixel uncertainty or correct local distortions.
+
+## Progress and experiments
+
+The future experiment plan is to compare an unshifted control, a known synthetic translation, and a masked test. Record the peak value, residual image, boundary treatment, and any interpolation method. Report uncertainty in both pixels and physical units once a verified pixel scale is available.
+
+```mermaid
+flowchart LR
+  A[Preserve originals] --> B[Read metadata]
+  B --> C[Calibration and masks]
+  C --> D[Estimate translation]
+  D --> E[Check sign and residuals]
+  E --> F[Archive method and uncertainty]
+```
+
+## Figures
+
+<Figure src="/images/solar-study.svg" alt="Illustrative solar field map with a small highlighted patch and displacement arrows" number={1} caption="A schematic registration study. This is an original vector illustration, not a solar observation or a measured result." source="Website demonstration illustration" />
+
+## Code and datasets
+
+The snippet above is self-contained apart from NumPy. Real FITS/FTS observations should be stored outside this website when large; publish a thumbnail, a provenance record, units, a license, and an approved data link here. Repository and dataset links remain unset until actual material is provided.
+
+## Results and limitations
+
+No observational results are available in this Demo. A circular FFT shift is ambiguous modulo the image size, and zero-padding alone does not resolve all edge or missing-data effects. A production workflow must distinguish physical evolution from nuisance motion and retain the original frames.

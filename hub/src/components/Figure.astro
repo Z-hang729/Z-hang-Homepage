@@ -1,0 +1,21 @@
+---
+import { url } from '../lib/site';
+interface Props { src: string; alt: string; caption: string; number?: number; source?: string; sourceUrl?: string; }
+const { src, alt, caption, number, source, sourceUrl } = Astro.props;
+const href = url(src);
+---
+<figure class="academic-figure" data-figure>
+  <button class="figure-image" type="button" data-zoom aria-label={`Enlarge figure: ${alt}`}><img src={href} alt={alt} loading="lazy" decoding="async" /></button>
+  <figcaption>{number && <strong>Figure {number}. </strong>}{caption}{source && <span class="figure-source">Source: {sourceUrl ? <a href={url(sourceUrl)}>{source}</a> : source}.</span>}</figcaption>
+  <div class="figure-actions"><button type="button" data-zoom>Enlarge ↗</button><a href={href} download>Download ↓</a></div>
+  <dialog class="figure-dialog" aria-label={`Enlarged figure: ${alt}`}><button type="button" data-close autofocus aria-label="Close enlarged figure">Close ×</button><img src={href} alt={alt} loading="lazy" /><p>{caption}</p></dialog>
+</figure>
+<script>
+  document.querySelectorAll<HTMLElement>('[data-figure]').forEach((figure) => {
+    const dialog = figure.querySelector<HTMLDialogElement>('dialog');
+    figure.querySelectorAll('[data-zoom]').forEach((button) => button.addEventListener('click', () => dialog?.showModal()));
+    figure.querySelector('[data-close]')?.addEventListener('click', () => dialog?.close());
+    dialog?.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
+  });
+</script>
+<style>.academic-figure{margin:2rem 0}.figure-image{display:block;padding:0;background:var(--surface,#f3f7f8);border:1px solid var(--border,#dde5e8);border-radius:12px;width:100%;cursor:zoom-in;overflow:hidden}.figure-image img{width:100%;display:block}.academic-figure figcaption{font-size:.875rem;line-height:1.65;color:var(--muted,#667085);margin-top:.75rem}.figure-source{display:block;font-size:.8rem}.figure-actions{display:flex;gap:1rem;font-size:.8rem;margin-top:.45rem}.figure-actions button{background:none;padding:0;border:0;color:var(--accent,#3388a8);font:inherit;cursor:pointer}.figure-dialog{max-width:min(94vw,1200px);max-height:92vh;padding:1rem;border:1px solid var(--border,#dde5e8);border-radius:12px;background:var(--surface,#fff);color:var(--text,#182b36)}.figure-dialog::backdrop{background:rgba(3,13,22,.78)}.figure-dialog img{display:block;max-width:100%;max-height:75vh}.figure-dialog>button{display:block;margin-left:auto;margin-bottom:1rem;border:1px solid var(--border,#dde5e8);padding:.5rem 1rem;border-radius:8px;cursor:pointer;background:var(--surface,#fff);color:inherit}.figure-dialog p{font-size:.85rem;margin:.6rem 0}</style>

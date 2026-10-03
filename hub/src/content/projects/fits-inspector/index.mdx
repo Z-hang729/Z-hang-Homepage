@@ -1,0 +1,63 @@
+---
+title: FITS Inspector
+description: A demonstration tool blueprint for inspecting FITS headers and image dimensions before analysis.
+date: 2026-09-20
+updated: 2026-09-30
+tags: [FITS, Python, Scientific Computing]
+featured: true
+demo: true
+techStack: [Python, Astropy, NumPy]
+cover: /images/code-study.svg
+references:
+  - title: Astropy — FITS file handling
+    url: https://docs.astropy.org/en/stable/io/fits/index.html
+---
+
+import Figure from '../../../components/Figure.astro';
+import Callout from '../../../components/Callout.astro';
+
+## Project overview
+
+This **Demo** is a project blueprint with a small example snippet. It does not claim a released application or a published repository. The intended tool summarizes headers and image dimensions before a scientific workflow modifies data.
+
+## Intended interface
+
+<Figure src="/images/code-study.svg" alt="Schematic data-inspection panel showing metadata fields and a small illustrative plot" number={1} caption="An interface sketch for future scientific tools. Values and curves are illustrative, not measured data or a screenshot of a released program." source="Website demonstration illustration" />
+
+## Minimal inspection code
+
+```python
+from pathlib import Path
+from astropy.io import fits
+
+def summarize_fits(path):
+    rows = []
+    with fits.open(Path(path), mode="readonly", memmap=True) as hdus:
+        for index, hdu in enumerate(hdus):
+            rows.append({
+                "index": index,
+                "name": hdu.name,
+                "hdu_type": type(hdu).__name__,
+                "dimensions": tuple(hdu.header.get(f"NAXIS{i}", 0)
+                                    for i in range(1, hdu.header.get("NAXIS", 0) + 1)),
+                "bitpix": hdu.header.get("BITPIX"),
+            })
+    return rows
+```
+
+This inspects header dimensions without loading the array. FITS axes are reported in `NAXIS1, NAXIS2, ...` order; NumPy array shapes typically reverse that ordering. Binary tables require separate interpretation.
+
+<Callout title="Preserve provenance">
+Keep the original filename, source, units, observation time, and calibration history. A header summary is not a validation of scientific meaning or instrument calibration.
+</Callout>
+
+## Planned extensions
+
+- A read-only image thumbnail with explicit scaling.
+- A clear warning for missing units or timestamp fields.
+- A downloadable metadata record containing provenance.
+- Links to externally hosted large observations rather than copies in the website repository.
+
+## Repository, demo, and documentation
+
+TODO: add a verified GitHub repository, a runnable demo, and versioned documentation when they exist. The reusable project schema already accepts these links.

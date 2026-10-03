@@ -1,0 +1,12 @@
+---
+import { url } from '../lib/site';
+interface Props { src: string; title?: string; }
+const { src, title = 'PDF document' } = Astro.props;
+const href = url(src);
+---
+<section class="pdf-viewer" aria-label={title}>
+  <div class="pdf-toolbar"><div><span class="eyebrow">PDF DOCUMENT</span><strong>{title}</strong></div><div class="pdf-actions"><a class="button button-secondary" href={href} target="_blank" rel="noopener noreferrer">Open <span class="sr-only">{title} in a new tab</span>↗</a><a class="button button-secondary" href={href} download>Download<span class="sr-only"> {title}</span> ↓</a></div></div>
+  <details class="pdf-preview"><summary>Preview document</summary><object data={`${href}#view=FitH`} type="application/pdf" title={title} width="100%" height="580"><p>Use <a href={href}>Open PDF</a> if your browser does not show the preview.</p></object></details>
+  <p class="pdf-mobile-note">Open the PDF in your preferred reader.</p>
+</section>
+<style>.pdf-viewer{border:1px solid var(--border,#dde5e8);border-radius:12px;overflow:hidden;margin:1.5rem 0}.pdf-toolbar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem}.pdf-toolbar strong{display:block;margin-top:.2rem}.pdf-actions{display:flex;gap:.5rem;flex-wrap:wrap}.pdf-preview{border-top:1px solid var(--border,#dde5e8)}.pdf-preview summary{cursor:pointer;padding:.8rem 1rem;color:var(--accent,#3388a8)}.pdf-preview object{display:block;border:0;max-width:100%}.pdf-mobile-note{display:none}@media(max-width:640px){.pdf-toolbar{align-items:flex-start;flex-direction:column}.pdf-preview{display:none}.pdf-mobile-note{display:block;padding:0 1rem 1rem;margin:0;color:var(--muted,#667085);font-size:.85rem}}</style>

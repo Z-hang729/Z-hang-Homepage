@@ -1,0 +1,6 @@
+---
+import { url } from '../lib/site';
+interface Props { title: string; href?: string; number?: number; }
+const { title, href, number } = Astro.props;
+---
+<span class="citation">{number && <span>[{number}] </span>}{href ? <a href={url(href)} rel={href.startsWith('http') ? 'noopener noreferrer' : undefined}>{title}</a> : title}</span>

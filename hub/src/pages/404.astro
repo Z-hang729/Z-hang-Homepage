@@ -1,0 +1,5 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {url} from '../lib/site';
+---
+<BaseLayout title="Signal lost"><div class="container error-page"><p class="eyebrow">OUTSIDE THE KNOWN ORBIT</p><div class="error-number">404</div><h1>Signal lost beyond the magnetopause.</h1><p>This page has drifted out of reach. Let’s return to familiar ground.</p><a class="button" href={url('/')}>Return home →</a></div></BaseLayout>

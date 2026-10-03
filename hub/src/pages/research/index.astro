@@ -1,0 +1,6 @@
+---
+import {getCollection} from 'astro:content';
+import Archive from '../../components/Archive.astro';
+const entries=(await getCollection('research')).sort((a,b)=>+new Date(b.data.updated)-+new Date(a.data.updated));
+---
+<Archive kind="research" entries={entries}/>

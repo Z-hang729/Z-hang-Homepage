@@ -1,0 +1,8 @@
+---
+import katex from 'katex';
+interface Props { formula: string; label?: string; }
+const { formula, label } = Astro.props;
+const math = katex.renderToString(formula, { displayMode: true, throwOnError: false, trust: false });
+---
+<div class="equation-block"><div class="equation-math" set:html={math} />{label && <span class="equation-label">({label})</span>}</div>
+<style>.equation-block{display:flex;align-items:center;gap:1rem;margin:1.5rem 0;max-width:100%;overflow:auto}.equation-math{flex:1;min-width:0}.equation-label{color:var(--muted,#667085);font-size:.85rem}</style>

@@ -1,0 +1,16 @@
+---
+import Icon from './Icon.astro';
+import { url, tagSlug, formatDate } from '../lib/site';
+interface Props { entry:any; compact?:boolean; }
+const { entry, compact = false } = Astro.props;
+const d=entry.data;
+const kind=entry.collection;
+---
+<article class:list={['content-card', 'card', {compact}]} data-card data-category={d.category || kind} data-semester={d.semester || ''} data-year={String(d.updated instanceof Date ? d.updated.getUTCFullYear() : d.updated).slice(0,4)} data-subject={d.category || ''} data-course={d.course || ''} data-status={d.status || ''} data-tags={d.tags.join('|')} data-title={d.title.toLowerCase()}>
+  {!compact && <a class="card-cover" href={url(`/${kind}/${entry.id}/`)} tabindex="-1" aria-hidden="true">{d.cover ? <img src={url(d.cover)} alt="" loading="lazy" width="600" height="320"/> : <div class={`card-placeholder ${kind}`}><Icon name={kind==='notes'?'book':'code'} size={48}/></div>}<span class="cover-index">{kind === 'research' ? 'FIELD NOTES' : kind === 'notes' ? 'THE NOTEBOOK' : 'BUILT WITH CURIOSITY'}</span></a>}
+  <div class="card-content"><div class="card-eyebrow">{d.demo && <span class="demo-tag">Demo</span>}<span>{d.status || d.semester || d.techStack?.slice(0,2).join(' / ') || kind}</span><Icon name="diagonal" size={16}/></div>
+    <h3><a href={url(`/${kind}/${entry.id}/`)}>{d.title}</a></h3><p>{d.description}</p>
+    <div class="card-tags">{d.tags.slice(0,3).map((tag:string)=><a class="tag" href={url(`/tags/${tagSlug(tag)}/`)}>{tag}</a>)}</div>
+    <div class="card-meta"><span>{d.course || (d.authors?.length ? d.authors.join(', ') : 'Z-hang')}</span><time datetime={new Date(d.updated).toISOString()}>{formatDate(d.updated)}</time></div>
+  </div>
+</article>

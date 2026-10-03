@@ -1,0 +1,13 @@
+---
+import { getCollection, render } from 'astro:content';
+import Article from '../../components/Article.astro';
+import { getDocuments } from '../../lib/content';
+interface Props { entry: import('astro:content').CollectionEntry<'research'>; document?: ReturnType<typeof getDocuments>[number]; }
+export async function getStaticPaths() {
+  const entries = await getCollection('research');
+  return [...entries.map((entry) => ({ params: { slug: entry.id }, props: { entry } })), ...getDocuments('research').map((document) => ({ params: { slug: document.slug }, props: { entry: entries.find((entry) => entry.id === document.parentId)!, document } })).filter((page) => page.props.entry)];
+}
+const { entry, document } = Astro.props;
+const rendered = document ? { Content: document.module.default, headings: document.module.getHeadings() } : await render(entry);
+---
+<Article entry={entry} Content={rendered.Content} headings={rendered.headings} documentTitle={document?.module.frontmatter.title} documentPath={document?.path} />

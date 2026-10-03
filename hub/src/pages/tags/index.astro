@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {allEntries,tagSlug} from '../../lib/content';
+import {url} from '../../lib/site';
+const entries=await allEntries();
+const tags=[...new Set(entries.flatMap(entry=>entry.data.tags))].sort();
+---
+<BaseLayout title="Tags"><div class="container"><header class="page-intro"><p class="eyebrow">CONNECTED IDEAS</p><h1>Follow a thread.</h1><p class="intro-description">Topics that connect research, course notes, and projects.</p></header><div class="interests" style="padding:20px 0 80px">{tags.map(tag=><a class="interest" href={url(`/tags/${tagSlug(tag)}/`)}>{tag} · {entries.filter(entry=>entry.data.tags.includes(tag)).length}</a>)}</div></div></BaseLayout>

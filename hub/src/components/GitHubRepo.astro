@@ -1,0 +1,7 @@
+---
+import { url } from '../lib/site';
+interface Props { href: string; title?: string; description?: string; }
+const { href, title = 'View repository', description } = Astro.props;
+---
+<a class="repo-card" href={url(href)} rel="noopener noreferrer"><span class="repo-icon" aria-hidden="true">⌘</span><span><strong>{title}</strong>{description && <small>{description}</small>}<small>{href.replace('https://github.com/', '')}</small></span><span aria-hidden="true">↗</span></a>
+<style>.repo-card{display:flex;align-items:center;gap:1rem;border:1px solid var(--border,#dde5e8);border-radius:10px;padding:1rem 1.2rem;margin:1rem 0;text-decoration:none}.repo-card>span:nth-child(2){flex:1}.repo-card strong,.repo-card small{display:block}.repo-card small{color:var(--muted,#667085);margin-top:.25rem;overflow-wrap:anywhere}.repo-icon{font-size:1.6rem}</style>
