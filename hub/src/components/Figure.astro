@@ -5,7 +5,7 @@ const { src, alt, caption, number, source, sourceUrl } = Astro.props;
 const href = url(src);
 ---
 <figure class="academic-figure" data-figure>
-  <button class="figure-image" type="button" data-zoom aria-label={`Enlarge figure: ${alt}`}><img src={href} alt={alt} loading="lazy" decoding="async" /></button>
+  <button class="figure-image" type="button" data-zoom aria-label={`Enlarge figure: ${alt}`}><img data-owner-image="body" data-owner-image-url={src} src={href} alt={alt} loading="lazy" decoding="async" /></button>
   <figcaption>{number && <strong>Figure {number}. </strong>}{caption}{source && <span class="figure-source">Source: {sourceUrl ? <a href={url(sourceUrl)}>{source}</a> : source}.</span>}</figcaption>
   <div class="figure-actions"><button type="button" data-zoom>Enlarge ↗</button><a href={href} download>Download ↓</a></div>
   <dialog class="figure-dialog" aria-label={`Enlarged figure: ${alt}`}><button type="button" data-close autofocus aria-label="Close enlarged figure">Close ×</button><img src={href} alt={alt} loading="lazy" /><p>{caption}</p></dialog>

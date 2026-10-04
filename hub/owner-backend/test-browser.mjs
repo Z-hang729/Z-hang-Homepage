@@ -25,6 +25,7 @@ const source = [
   'window.addEventListener("message",e=>{if(e.data?.namespace==="zhang-owner")window.bridgeMessages.push(e.data)});',
   'const ctx={base:"/",snapshot:()=>current,model:()=>readOwnerModel(current),refresh(){},notice(message){window.lastNotice=message},transport:{async call(method,params){if(method!=="file")throw Error("Unexpected fixture RPC");window.fileLoads++;return{path:params.path,sha:"3".repeat(40),encoding:"base64",content:btoa("%PDF-test"),size:9}}},stage(changes){validateChangeSet(changes,{snapshotFiles:current.files});window.staged.push(changes);current=applyDraftToSnapshot(current,changes)}};',
   'export function upload(){return openUploads(ctx,{kind:"research",slug:"browser-study"})}',
+  'export function importCourse(){return openUploads(ctx,{kind:"notes"})}',
   'export function files(){return openFiles(ctx)}',
   'export function inspect(){return current}',
   'window.fixtureReady=true;',
@@ -107,7 +108,25 @@ try {
   await page.evaluate('(function(){const dialog=[...document.querySelectorAll(".owner-dialog")].at(-1);dialog.querySelector("input").value="report-renamed.pdf";dialog.querySelector(".owner-primary").click()})()');
   await page.until('[...document.querySelectorAll(".owner-dialog")].at(-1).querySelector(".owner-form-status").textContent.includes("referenced")');
   assert.equal(await page.evaluate('window.staged.length'), 2);
-  await page.evaluate('(function(){[...document.querySelectorAll(".owner-dialog")].at(-1).close();document.querySelector(".owner-dialog").close();window.bridgeWindow=window.open("/bridge/?client_origin="+encodeURIComponent(location.origin),"smoke-bridge","popup,width=540,height=700")})()');
+  await page.evaluate('(function(){[...document.querySelectorAll(".owner-dialog")].at(-1).close();document.querySelector(".owner-dialog").close();OwnerSmoke.importCourse()})()');
+  await page.until('document.querySelector(".owner-upload-new-entry")?.hidden===false');
+  await page.evaluate('(function(){const data=new DataTransfer();const specs=[["README.md","# Actual course material\\n\\n[Lecture](Lectures/01.md)","text/markdown"],["Lectures/01.md","# First lecture\\n\\nStudy $x^2$.","text/markdown"],["HW01.pdf","%PDF-original","application/pdf"]];for(const[name,body,type]of specs){const file=new File([body],name.split("/").at(-1),{type});Object.defineProperty(file,"webkitRelativePath",{value:"Space Plasma Physics/"+name});data.items.add(file)}const picker=document.querySelector("input[type=file][webkitdirectory]");picker.files=data.files;picker.dispatchEvent(new Event("change",{bubbles:true}))})()');
+  await page.until('document.querySelectorAll(".owner-upload-file").length===3 && !document.querySelector(".owner-primary").disabled');
+  assert.equal(await page.evaluate('[...document.querySelectorAll(".owner-field")].find(label=>label.querySelector("span")?.textContent==="Title / Course name").querySelector("input").value'), 'Space Plasma Physics');
+  await page.evaluate('document.querySelector(".owner-primary").click()');
+  await page.until('document.querySelector(".owner-form-status").textContent.includes("semester")');
+  assert.equal(await page.evaluate('window.staged.length'), 2, 'Missing confirmed course metadata must not create a partial parent.');
+  await page.evaluate('(function(){const field=label=>[...document.querySelectorAll(".owner-field")].find(node=>node.querySelector("span")?.textContent===label).querySelector("input,select");field("Title / Course name").value="Confirmed course title";field("Title / Course name").dispatchEvent(new Event("input",{bubbles:true}));field("Semester").value="2026 Fall";field("Category").value="Space Physics";document.querySelector(".owner-primary").click()})()');
+  await page.until('window.staged.length===3 && !document.querySelector(".owner-dialog")');
+  const importedCourse = await page.evaluate('OwnerSmoke.inspect()');
+  const coursePath = 'hub/src/content/notes/confirmed-course-title/index.md';
+  const course = importedCourse.files.find(file => file.path === coursePath);
+  assert.ok(course.content.includes('semester: 2026 Fall') && course.content.includes('category: Space Physics'));
+  assert.ok(course.content.includes('Actual course material') && course.content.includes('/notes/confirmed-course-title/files/Lectures/01/'));
+  assert.ok(importedCourse.files.find(file => file.path === 'hub/src/content/notes/confirmed-course-title/files/Lectures/01.md'));
+  assert.equal(importedCourse.files.find(file => file.path === 'hub/public/uploads/notes/confirmed-course-title/HW01.pdf').content, btoa('%PDF-original'));
+  assert.equal(await page.evaluate('window.staged.at(-1).filter(change=>change.path===' + JSON.stringify(coursePath) + ').length'), 1, 'The created parent and all imports join one staged batch.');
+  await page.evaluate('window.bridgeWindow=window.open("/bridge/?client_origin="+encodeURIComponent(location.origin),"smoke-bridge","popup,width=540,height=700");true');
   await page.until('window.bridgeMessages.some(message=>message.type==="ready")');
   await page.evaluate('window.bridgeWindow.postMessage({namespace:"zhang-owner",type:"request",id:"safe-session",method:"session",params:{}},location.origin)');
   await page.until('window.bridgeMessages.some(message=>message.id==="safe-session")');
@@ -126,7 +145,7 @@ try {
   await pause(300);
   assert.equal(rpcCount, 1, 'Untrusted window source must not invoke the bridge API.');
   assert.equal(await page.evaluate('window.bridgeMessages.some(message=>message.id==="forged-publish")'), false);
-  const summary = { passed: ['safe upload rejection and preserved folder hierarchy', 'explicit metadata and partial-selection confirmation', 'draft-only multiple file upload', 'metadata-only asset move with typed confirmation', 'automatic content link migration', 'referenced asset deletion prevented', 'real top-level popup bridge RPC', 'CSRF kept inside bridge', 'untrusted window source rejected'], externalPublishing: false };
+  const summary = { passed: ['safe upload rejection and preserved folder hierarchy', 'explicit metadata and partial-selection confirmation', 'draft-only multiple file upload', 'metadata-only asset move with typed confirmation', 'automatic content link migration', 'referenced asset deletion prevented', 'new course folder import confirms metadata and stages parent, originals and reading pages together', 'real top-level popup bridge RPC', 'CSRF kept inside bridge', 'untrusted window source rejected'], externalPublishing: false };
   await writeFile(path.join(qa, 'results.json'), JSON.stringify(summary, null, 2));
   console.log(JSON.stringify(summary, null, 2));
 } finally {

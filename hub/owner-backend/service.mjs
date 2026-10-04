@@ -195,7 +195,7 @@ export class OwnerService {
       }
       files.push(file);
     }
-    return { head, files, repository: this.publicSession(null).repository };
+    return { head, files, repository: { ...this.publicSession(null).repository, ...await github.repositoryInfo() } };
   }
 
   async publish(github, session, params) {

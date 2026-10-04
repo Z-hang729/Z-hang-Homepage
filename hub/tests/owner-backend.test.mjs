@@ -69,6 +69,8 @@ async function fixture(options = {}) {
       permissions: { contents: 'write', metadata: 'read', actions: 'read', deployments: 'read', ...(options.permissions || {}) }, suspended_at: null }] });
     if (path === '/user/installations/42/repositories') return reply({ total_count: options.repositoryCount || 1, repositories: [{ id: 43, owner: { id: ownerId },
       full_name: 'Z-hang729/Z-hang-Homepage', permissions: { push: true } }] });
+    if (path === '/repos/Z-hang729/Z-hang-Homepage') return reply({ id: options.metadataRepositoryId || 43, owner: { id: ownerId },
+      full_name: 'Z-hang729/Z-hang-Homepage', size: 128, has_pages: true });
     if (path.endsWith('/git/ref/heads/main')) return reply({ object: { type: 'commit', sha: head } });
     if (path.includes('/git/commits/')) return reply({ tree: { sha: path.split('/').at(-1) } });
     if (path.includes('/git/trees/')) return reply({ tree: trees.get(path.split('/').at(-1)) || [...files.values()], truncated: Boolean(options.truncated) });
@@ -175,11 +177,23 @@ test('Visitor, forged cookie, cross-origin calls, missing CSRF and expired/logou
   assert.equal(f.mutations(), 0);
 });
 
+test('Repository statistics reject metadata from a different repository', async () => {
+  const f = await fixture({ metadataRepositoryId: 99 });
+  const auth = await f.authenticate();
+  const response = await f.rpc(auth, 'snapshot');
+  assert.equal(response.status, 403);
+  assert.equal((await response.json()).error.code, 'REPOSITORY_NOT_ALLOWED');
+  assert.equal(f.mutations(), 0);
+});
+
 test('Snapshot plus multi-file add/update/delete publish creates exactly one atomic commit and replays safely', async () => {
   const f = await fixture();
   const auth = await f.authenticate();
   const snapshot = await (await f.rpc(auth, 'snapshot')).json();
   assert.equal(snapshot.head, firstHead);
+  assert.equal(snapshot.repository.sizeBytes, 128 * 1024);
+  assert.equal(snapshot.repository.sizeSource, 'github-repository');
+  assert.equal(snapshot.repository.hasPages, true);
   assert.ok(snapshot.files.find(file => file.path === profilePath).content.includes('Academic profile'));
   const publication = f.params();
   publication.changes.push(f.change('hub/src/content/research/new-study/index.md', document('New study')),

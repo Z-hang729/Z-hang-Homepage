@@ -2,9 +2,11 @@
 
 此目录是在既有 Astro / GitHub Pages 网站之外运行的轻量认证后端。公开页面继续由 GitHub Pages 提供；仓库内容仍是唯一长期内容来源。SQLite Durable Object 仅保存短期登录 state、加密会话、限流计数和发布幂等记录。没有第二套内容数据库。
 
-当前代码已通过 10 项 GitHub API mock 集成测试、8 项前端发布恢复测试、Wrangler dry-run 打包、本地真实 workerd + SQLite Durable Object smoke test，以及 9 项独立浏览器上传 / 文件管理 / popup bridge 检查。真实 GitHub OAuth、远程 commit 和线上部署尚未配置、验证。浏览器已经登录 GitHub 不代表当前开发工具能够控制该浏览器；无需安装 GitHub 插件才能配置此后端。
+当前代码已通过 11 项 GitHub API mock 集成测试、27 项前端发布恢复测试、Wrangler dry-run 打包、本地真实 workerd + SQLite Durable Object smoke test，以及 10 项独立浏览器上传 / 文件管理 / popup bridge 检查。主站完整测试现为 114 项通过；隔离主站浏览器检查 13 组通过。Worker 已配置并真实部署到 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，version `6289870c-a3dd-4179-8cc9-9e73c38f7016`，10 项线上匿名门禁检查通过。实际 Owner OAuth 与通过网页提交、上线仍需独立验证。界面配置使用标准 Windows 辅助功能操作专用窗口，无需 GitHub 插件，也不读取浏览器 cookie / 凭据数据库。
 
 ## 一次性配置
+
+现有 App 已创建并仅安装到本站仓库（App ID `5184269`，Installation ID `167835885`）；两项后台 Secrets 已写入。以下步骤用于未来重新配置或维护，无需再次创建 App 或重复安装。
 
 1. 在自己的 GitHub 账号 [注册私有 GitHub App](https://github.com/settings/apps/new)。Homepage URL 使用 `https://z-hang729.github.io/Z-hang-Homepage/`；Callback URL 精确使用 `https://你的Worker域名/auth/callback`。启用用户 access token 到期；取消 Webhook Active；安装时不自动请求 OAuth。仅授予 Contents: Read and write、Actions: Read-only、Deployments: Read-only，Metadata: Read-only 自动随 App 提供。不要授予 Workflows 或其他权限。[GitHub 官方用户授权说明](https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app)
 2. 将 App 安装到自己的账号，选择 **Only select repositories**，只选择 `Z-hang-Homepage`。记录 App ID、Client ID、Installation ID（安装设置 URL 中的数字），以及目标 Repository ID（仓库 API 的 `id`）。Owner Account ID 已核实为 `326471613`；仓库未存在时先创建这个普通仓库并推送当前网站。不要使用或替换主页仓库。

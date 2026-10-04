@@ -10,7 +10,7 @@
 - Repository ID 为 `1404136587`，已通过本人账号访问的官方 API 核实；较早的匿名 404 对应仓库当时的私有状态。
 - 使用官方 Git Credential Manager 完成账号连接；桌面界面操作使用 Windows 辅助功能，不读取用户浏览器 cookie 或凭据数据库。
 - Sites 的原地址已用新站完整替换，保持原有仅所有者可访问的设置；新站不使用旧 D1 / R2 内容。预览地址为 [`https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/`](https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/)。
-- GitHub App 已创建，ID `5184269`、slug `z-hang-homepage-owner-cms`；后台实际部署地址为 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`。安装与密钥配置完成前，后台返回 `503 NOT_CONFIGURED`，公开站仍可正常阅读。生产 OAuth 与实际 Owner 发布闭环尚需独立验证。
+- GitHub App 已创建，ID `5184269`、slug `z-hang-homepage-owner-cms`，并已仅安装到本站仓库，Installation ID 为 `167835885`。短期用户令牌到期已开启、webhook 已关闭；两个秘密已通过官方 Wrangler 写入后台 Secrets，未进入源码或文件。后台地址为 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，version `6289870c-a3dd-4179-8cc9-9e73c38f7016`，已真实部署并通过 10 项匿名生产检查。公开构建 URL 配置已回读确认；生产 OAuth 与实际 Owner 发布闭环仍需独立验证。
 
 ## 架构
 
@@ -23,6 +23,14 @@ GitHub 仓库仍然是内容的最终来源。编辑器读取现有 `src/data/` 
 认证服务选择具有仓库范围权限的 GitHub App，使用 OAuth web flow 与 PKCE S256。它在服务端验证 GitHub 返回的数字账号 ID；短期 user access token 在服务端 AES-GCM 加密保存，不保存 refresh token，不使用 App private key。浏览器只得到应用会话，不能得到 GitHub 写入 token。
 
 backend 为独立 Cloudflare Worker，SQLite Durable Object 只保存 OAuth state、加密会话与发布幂等元数据。GitHub 仍保存全部网站内容。
+
+## 直接导入、图片与管理概览
+
+`Upload folder` 可直接创建新的 Research、Course 或 Project。确认文件夹建议的标题、日期与分类；课程还需确认学期。README 概览、cover、paper 的识别选择会与新父页面、原始附件和 lecture 阅读副本一起进入一个草稿批次。最终限额包含生成的阅读页，不会先创建或发布一个不完整的父条目。
+
+Avatar / Cover 表单提供图片选择与预览；About 的头像、条目封面和正文图片提供 `Edit image`。允许的图片必须通过签名、MIME 和大小校验，保存原始字节。`Replace Image` 可复用已有上传路径，`Upload New` 使用新路径。移除图片引用默认保留原件；实际删除上传文件需输入原文件名，并通过其他内容引用检查。图片与内容引用一起进入发布审查。
+
+Owner workspace 展示三类条目数量、上传资产合计与 GitHub 报告的仓库大小。资产合计反映当前草稿；仓库大小由 GitHub 提供并包含历史，不作为上传额度。最新 commit 与其具体 SHA 的 build / Pages deployment 分别显示；状态读取失败时显示不可用，不推断成功。可直接打开 Repository 和 Actions，也可手动刷新发布状态。
 
 静态站通过顶层 popup 打开 Worker `/bridge/?client_origin=<本站origin>`。popup 使用 Worker 自身的 first-party cookie；本站与 bridge 通过固定 `zhang-owner` postMessage 协议沟通，双方严格验证 origin 与 source。Worker API 不启用跨源 CORS，也不依赖第三方 cookie。
 
@@ -100,7 +108,7 @@ npx wrangler secret put SESSION_ENCRYPTION_KEY --config wrangler.jsonc
 npm run deploy
 ```
 
-secret 的值不得写入命令文本、示例配置或聊天。账户登录、OAuth / App 授权或本人安全确认由账户本人完成；其他普通开发配置继续由开发团队处理。
+secret 的值不得写入命令文本、示例配置或聊天。用户已授权本项目必要的 GitHub App / Secret、Cloudflare Worker 和账户配置操作；开发团队可通过官方流程处理这些已授权操作。遇到必须由账户本人完成的密码、2FA 或平台另行要求的确认时，再通知本人处理。
 
 ## 本地开发与检查
 

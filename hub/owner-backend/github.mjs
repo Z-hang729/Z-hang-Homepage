@@ -59,6 +59,16 @@ export class GitHub {
     return ref.object.sha;
   }
 
+  async repositoryInfo() {
+    const repository = await this.request(this.repo);
+    if (repository.id !== this.config.repositoryId || repository.owner?.id !== this.config.ownerId ||
+      repository.full_name?.toLowerCase() !== `${this.config.owner}/${this.config.repo}`.toLowerCase()) {
+      throw new OwnerError('REPOSITORY_NOT_ALLOWED', '仓库统计来源与目标网站不符。', 403);
+    }
+    return { sizeBytes: Number.isFinite(repository.size) && repository.size >= 0 ? repository.size * 1024 : null,
+      sizeSource: 'github-repository', hasPages: Boolean(repository.has_pages) };
+  }
+
   async tree(head) {
     const commit = await this.request(`${this.repo}/git/commits/${head}`);
     const tree = await this.request(`${this.repo}/git/trees/${commit.tree.sha}?recursive=1`);

@@ -1,0 +1,8 @@
+.owner-dashboard-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:24px 0}
+.owner-stat{display:flex;flex-direction:column;gap:8px;padding:18px;border:1px solid var(--line);border-radius:10px;background:var(--surface);min-width:0}
+.owner-stat strong{font:24px var(--font-sans);overflow-wrap:anywhere}
+.owner-dashboard-publishing{padding:20px 24px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.owner-dashboard-publishing h2{font-size:22px;margin:0 0 12px}
+.owner-dashboard-publishing p{font:13px/1.7 var(--font-sans);overflow-wrap:anywhere}
+.owner-dashboard-publishing .owner-row-actions{margin-top:16px;gap:18px}
+@media(max-width:480px){.owner-dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.owner-dashboard-publishing{padding:18px}}

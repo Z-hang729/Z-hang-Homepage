@@ -1,10 +1,11 @@
 import { el, button, modal, inputField, selectField, formAction } from './dom.js';
-import { analyzeUploadFiles, uploadAssetChanges, assetURL, moveAssetChanges, deleteAssetChanges } from '../lib/owner/model.mjs';
+import { analyzeUploadFiles, uploadAssetChanges, importFolderChanges, generateSlug, normalizeTags, assetURL, moveAssetChanges, deleteAssetChanges } from '../lib/owner/model.mjs';
 import { OWNER_LIMITS, safeRelativePath, validateAsset, encodeBase64, decodeBase64 } from '../lib/owner/policy.mjs';
 
 const KINDS = ['general', 'research', 'notes', 'projects'];
 const ASSET_GROUPS = ['images', 'documents', 'files', 'research', 'notes', 'projects'];
 const IMAGE = /\.(?:png|jpe?g|gif|webp|avif|bmp)$/i;
+const CREATE_NEW = '__create_new__';
 const MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', zip: 'application/zip' };
 
 export function formatBytes(value = 0) {
@@ -92,6 +93,21 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
   const assetTarget = selectField('General assets folder', ASSET_GROUPS.includes(target) && !KINDS.includes(target) ? target : 'files', ['images', 'documents', 'files']);
   const article = selectField('Article / Course', slug || '', []);
   const destinationGroup = el('div', { class: 'owner-upload-destination' }, destination.node, article.node, assetTarget.node);
+  const today = new Date().toISOString().slice(0, 10);
+  const newTitle = inputField('Title / Course name', '');
+  const newDescription = inputField('Short description', '', { multiline: true, rows: 3 });
+  const newSlug = inputField('URL slug (leave blank to generate)', '');
+  const newDate = inputField('Entry date', today, { type: 'date' });
+  const newTags = inputField('Tags, separated by commas', '');
+  const newSemester = inputField('Semester', '', { attrs: { placeholder: 'For example 2026 Fall' } });
+  const newCategory = selectField('Category', 'Others', ['Space Physics', 'Physics', 'Mathematics', 'Computer Science', 'General Education', 'Others']);
+  const newCourseCode = inputField('Course code (optional)', '');
+  const newInstructor = inputField('Instructor (optional)', '');
+  const newStatus = selectField('Status', 'Planning', ['Planning', 'In Progress', 'Completed', 'Paused']);
+  const courseFields = el('div', { class: 'owner-form-grid' }, newSemester.node, newCategory.node, newCourseCode.node, newInstructor.node);
+  const newEntry = el('section', { class: 'owner-upload-new-entry', hidden: true }, el('h3', {}, 'Create from these materials'),
+    el('p', { class: 'owner-muted' }, 'Confirm the title and metadata below. The new page, original files and reading notes join the same unpublished draft.'),
+    el('div', { class: 'owner-form-grid' }, newTitle.node, newDescription.node, newSlug.node, newDate.node, newTags.node), courseFields, newStatus.node);
   const list = el('div', { class: 'owner-upload-preview', 'aria-live': 'polite' });
   const recognition = el('div', { class: 'owner-upload-recognition' });
   const summary = el('p', { class: 'owner-muted' }, 'Choose files or a folder. Maximum 10 MB per file, 20 MB per publish and 250 changed files.');
@@ -100,25 +116,32 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
   const paper = checkbox('Use the recognized paper PDF.');
   const overwrite = checkbox('Replace the listed existing files in this draft.');
   const acceptPartial = checkbox('Upload only the accepted files; exclude all rejected files shown below.');
-  let accepted = [], rejected = [], analysis = null, preparing = false, sequence = 0, chosenRoot = null;
+  let accepted = [], rejected = [], analysis = null, preparing = false, sequence = 0, chosenRoot = null, recognitionAnalysis = null, recognitionDestination = null;
   const objectURLs = new Set();
   const release = () => { for (const url of objectURLs) URL.revokeObjectURL(url); objectURLs.clear(); };
   surface.dialog.addEventListener('close', release, { once: true });
 
-  function chosen() { return { kind: destination.input.value, slug: article.input.value, target: assetTarget.input.value }; }
+  function chosen() {
+    const creating = destination.input.value !== 'general' && article.input.value === CREATE_NEW;
+    return { kind: destination.input.value, slug: creating ? newSlug.input.value.trim() || generateSlug(newTitle.input.value.trim()) : article.input.value, target: assetTarget.input.value, creating };
+  }
   function refreshDestination() {
     const selected = article.input.value || slug;
     const currentKind = destination.input.value;
     const entries = ctx.model().entries[currentKind] || [];
-    article.input.replaceChildren(...entries.map(item => el('option', { value: item.slug }, item.metadata.title)));
+    article.input.replaceChildren(el('option', { value: CREATE_NEW }, currentKind === 'notes' ? 'Create a new course from these files' : currentKind === 'research' ? 'Create new research from these files' : 'Create a new project from these files'), ...entries.map(item => el('option', { value: item.slug }, item.metadata.title)));
     if (entries.some(item => item.slug === selected)) article.input.value = selected;
+    else article.input.value = CREATE_NEW;
     article.node.hidden = currentKind === 'general';
     assetTarget.node.hidden = currentKind !== 'general';
     renderPreview();
   }
 
   function renderPreview() {
-    const { kind: selectedKind, slug: selectedSlug, target: selectedTarget } = chosen();
+    const { kind: selectedKind, slug: selectedSlug, target: selectedTarget, creating } = chosen();
+    newEntry.hidden = !creating;
+    courseFields.hidden = selectedKind !== 'notes';
+    newStatus.node.hidden = selectedKind === 'notes';
     const snapshotFiles = fileEntries(ctx.snapshot());
     const conflicts = accepted.map(item => destinationPath(selectedKind, selectedSlug, selectedTarget, item.path)).filter(path => snapshotFiles.has(path));
     summary.textContent = preparing ? 'Preparing files…' : `${chosenRoot ? `Folder: ${chosenRoot} · ` : ''}${accepted.length} accepted · ${rejected.length} excluded · ${formatBytes(analysis?.bytes || accepted.reduce((total, item) => total + item.size, 0))}`;
@@ -134,7 +157,12 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
       list.append(rows);
     }
     recognition.replaceChildren();
-    readme.input.checked = false; cover.input.checked = false; paper.input.checked = false; overwrite.input.checked = false;
+    const destinationKey = selectedKind + '/' + article.input.value;
+    if (analysis !== recognitionAnalysis || destinationKey !== recognitionDestination) {
+      readme.input.checked = creating; cover.input.checked = creating; paper.input.checked = creating; overwrite.input.checked = false;
+      recognitionAnalysis = analysis; recognitionDestination = destinationKey;
+    }
+    readme.node.querySelector('span').textContent = creating ? 'Use the recognized README as the new page overview.' : 'Use the recognized README as the article overview (replaces its current body).';
     const recognized = analysis?.recognized;
     if (recognized) {
       recognition.append(el('p', { class: 'owner-muted' }, [recognized.readme && `README: ${recognized.readme}`, recognized.cover && `Cover: ${recognized.cover}`, recognized.paper && `Paper: ${recognized.paper}`, recognized.bibliography && `Bibliography: ${recognized.bibliography}`, recognized.figures.length && `${recognized.figures.length} figures`, recognized.code.length && `${recognized.code.length} code files`, recognized.logs.length && `${recognized.logs.length} log files`].filter(Boolean).join(' · ') || 'No automatic metadata suggestions.'));
@@ -146,7 +174,7 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
     }
     if (conflicts.length) recognition.append(el('p', {}, `Existing files to replace: ${conflicts.map(path => path.split('/').pop()).join(', ')}`), overwrite.node);
     acceptPartial.node.hidden = rejected.length === 0;
-    save.disabled = preparing || !analysis || !accepted.length || (selectedKind !== 'general' && !selectedSlug);
+    save.disabled = preparing || !analysis || !accepted.length || (selectedKind !== 'general' && (!selectedSlug || (creating && !newTitle.input.value.trim())));
     return conflicts;
   }
 
@@ -156,6 +184,10 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
     acceptPartial.input.checked = false;
     const normalized = normalizeSelectedPaths(selections);
     chosenRoot = normalized.root;
+    const suggestedTitle = chosenRoot || normalized.selections.find(item => /(^|\/)README\.mdx?$/i.test(item.path))?.path.split('/').slice(-2, -1)[0]
+      || normalized.selections[0]?.file.name.replace(/\.[^.]+$/, '') || '';
+    if (!newTitle.input.dataset.ownerEdited) newTitle.input.value = suggestedTitle;
+    if (!newDescription.input.dataset.ownerEdited) newDescription.input.value = suggestedTitle ? `Imported materials from ${suggestedTitle}.` : '';
     renderPreview();
     surface.status.textContent = '';
     const seen = new Set();
@@ -216,24 +248,35 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
       surface.status.textContent = error.message; surface.status.dataset.error = 'true';
     }
   });
-  surface.body.append(destinationGroup, drop, summary, recognition, acceptPartial.node, list);
+  surface.body.append(destinationGroup, newEntry, drop, summary, recognition, acceptPartial.node, list);
   surface.body.append(el('p', { class: 'owner-muted' }, 'Limits: 10 MB per file, 20 MB per publish, 250 changed files including generated reading copies.'));
   surface.body.append(el('p', { class: 'owner-muted' }, 'Folder picking works in current Chrome, Edge and Safari. If a browser does not expose directories, use Choose files to select multiple materials. Scientific images keep their original resolution.'));
   const save = formAction(surface, 'Add to draft', async () => {
     if (preparing || !analysis) throw new Error('Wait for the file preview to finish.');
     if (rejected.length && !acceptPartial.input.checked) throw new Error('Review the excluded files, then confirm uploading only the accepted files.');
-    const { kind: selectedKind, slug: selectedSlug, target: selectedTarget } = chosen();
+    const { kind: selectedKind, slug: selectedSlug, target: selectedTarget, creating } = chosen();
     const existing = fileEntries(ctx.snapshot());
     const conflicts = accepted.filter(file => existing.has(destinationPath(selectedKind, selectedSlug, selectedTarget, file.path)));
     if (conflicts.length && !overwrite.input.checked) throw new Error('Confirm replacing the listed existing files.');
-    const changes = uploadAssetChanges(ctx.snapshot(), { kind: selectedKind, slug: selectedSlug, target: selectedTarget,
-      files: accepted.map(({ previewURL, size, ...file }) => file), useReadme: readme.input.checked, useCover: cover.input.checked, usePaper: paper.input.checked });
+    const upload = { kind: selectedKind, slug: selectedSlug, target: selectedTarget,
+      files: accepted.map(({ previewURL, size, ...file }) => file), useReadme: readme.input.checked, useCover: cover.input.checked, usePaper: paper.input.checked };
+    let changes;
+    if (creating) {
+      if (selectedKind === 'notes' && !newSemester.input.value.trim()) throw new Error('Confirm the course semester before importing.');
+      const metadata = { title: newTitle.input.value.trim(), description: newDescription.input.value.trim(), date: newDate.input.value, updated: newDate.input.value,
+        tags: normalizeTags(newTags.input.value), featured: false, demo: false,
+        ...(selectedKind === 'notes' ? { course: newTitle.input.value.trim(), semester: newSemester.input.value.trim(), category: newCategory.input.value,
+          ...(newCourseCode.input.value.trim() ? { courseCode: newCourseCode.input.value.trim() } : {}), ...(newInstructor.input.value.trim() ? { instructor: newInstructor.input.value.trim() } : {}) } : { status: newStatus.input.value }) };
+      changes = importFolderChanges(ctx.snapshot(), { ...upload, metadata });
+    } else changes = uploadAssetChanges(ctx.snapshot(), upload);
     await stage(ctx, changes, `${accepted.length} files added to your draft. Review and publish when ready.`);
     surface.close();
   });
   destination.input.addEventListener('change', refreshDestination);
   article.input.addEventListener('change', renderPreview);
   assetTarget.input.addEventListener('change', renderPreview);
+  for (const control of [newTitle, newDescription]) control.input.addEventListener('input', () => { control.input.dataset.ownerEdited = 'true'; renderPreview(); });
+  newSlug.input.addEventListener('input', renderPreview);
   refreshDestination();
   return surface;
 }

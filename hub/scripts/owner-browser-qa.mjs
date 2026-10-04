@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:net';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -9,12 +10,17 @@ import crypto from 'node:crypto';
 const root = process.cwd();
 const qa = path.join(root, '.local', 'qa');
 const isolated = path.join(root, '.local', `owner-browser-site-${Date.now()}`);
-const origin = 'http://127.0.0.1:4324';
-const debugOrigin = 'http://127.0.0.1:9236';
+const portReservation = createServer();
+await new Promise(resolve => portReservation.listen(0, '127.0.0.1', resolve));
+const serverPort = portReservation.address().port;
+await new Promise(resolve => portReservation.close(resolve));
+const origin = 'http://127.0.0.1:' + serverPort;
+let debugOrigin;
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
 const hash = file => crypto.createHash('sha256').update(readFileSync(file)).digest('hex');
 const mainFiles = ['src/data/profile.yaml', 'src/data/homepage.yaml'];
 const baseline = new Map(mainFiles.map(file => [file, hash(path.join(root, file))]));
+const initialCounts = Object.fromEntries(['research','notes','projects'].map(kind => [kind, readdirSync(path.join(root,'src/content',kind),{withFileTypes:true}).filter(entry => entry.isDirectory() && ['index.md','index.mdx'].some(name => existsSync(path.join(root,'src/content',kind,entry.name,name)))).length]));
 mkdirSync(qa, { recursive: true });
 mkdirSync(isolated, { recursive: true });
 for (const folder of ['src', 'public', 'scripts']) cpSync(path.join(root, folder), path.join(isolated, folder), { recursive: true });
@@ -24,7 +30,7 @@ for (const file of ['astro.config.mjs', 'package.json', 'tsconfig.json']) cpSync
 const configFile = path.join(isolated, 'astro.config.mjs');
 writeFileSync(configFile, readFileSync(configFile, 'utf8').replace('vite: { plugins:', `vite: { server: { fs: { allow: [${JSON.stringify(isolated)}, ${JSON.stringify(path.join(root, 'node_modules'))}] } }, plugins:`));
 const astroBin = JSON.parse(readFileSync(path.join(root, 'node_modules/astro/package.json'), 'utf8')).bin.astro;
-const server = spawn(process.execPath, [path.join(root, 'node_modules/astro', astroBin), 'dev', '--host', '127.0.0.1', '--port', '4324', '--force'], {
+const server = spawn(process.execPath, [path.join(root, 'node_modules/astro', astroBin), 'dev', '--host', '127.0.0.1', '--port', String(serverPort), '--force'], {
   cwd: isolated, env: { ...process.env, SITE_BASE_PATH: '/', PUBLIC_OWNER_BACKEND_URL: '' }, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'],
 });
 let serverOutput = '', browser, socket, targetId;
@@ -39,14 +45,12 @@ try {
     await pause(250);
     if (attempt === 479) throw new Error('Isolated Astro unavailable: ' + serverOutput);
   }
-  let hasBrowser = false;
-  try { hasBrowser = (await fetch(debugOrigin + '/json/version')).ok; } catch {}
-  if (!hasBrowser) {
-    const executable = [process.env.BROWSER_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/chromium', '/usr/bin/google-chrome'].filter(Boolean).find(existsSync);
-    if (!executable) throw new Error('Set BROWSER_PATH to Chrome / Chromium.');
-    browser = spawn(executable, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=9236', `--user-data-dir=${path.join(qa, 'owner-test-profile')}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
-    for (let attempt = 0; attempt < 80; attempt++) { try { if ((await fetch(debugOrigin + '/json/version')).ok) break; } catch {} await pause(150); }
-  }
+  const executable = [process.env.BROWSER_PATH, 'C:/Program Files/Google/Chrome/Application/chrome.exe', '/usr/bin/chromium', '/usr/bin/google-chrome'].filter(Boolean).find(existsSync);
+  if (!executable) throw new Error('Set BROWSER_PATH to Chrome / Chromium.');
+  const browserProfile = path.join(qa,'owner-test-profile-'+Date.now());
+  browser = spawn(executable, ['--headless=new', '--disable-gpu', '--no-first-run', '--no-default-browser-check', '--remote-debugging-port=0', `--user-data-dir=${browserProfile}`, 'about:blank'], { windowsHide: true, stdio: 'ignore' });
+  for (let attempt = 0; attempt < 100; attempt++) { try { const port=Number(readFileSync(path.join(browserProfile,'DevToolsActivePort'),'utf8').split('\n')[0]); if(port){debugOrigin='http://127.0.0.1:'+port;break;} } catch {} await pause(150); }
+  if (!debugOrigin) throw new Error('The isolated test browser did not start.');
   const target = await (await fetch(debugOrigin + '/json/new?about:blank', { method: 'PUT' })).json();
   targetId = target.id;
   socket = new WebSocket(target.webSocketDebuggerUrl);
@@ -90,6 +94,13 @@ try {
   await until(`document.querySelector('[data-owner-workspace]')?.hidden===false && Boolean(document.querySelector('.owner-toolbar'))`, 'Local sign in');
   assert.equal(await evaluate(`document.querySelector('.owner-mode-label').textContent`), 'LOCAL EDIT');
   await screenshot('phase2-owner-workspace'); results.checks.push('Local workspace explicitly identifies local mode');
+  const dashboardStats = await evaluate(`Object.fromEntries([...document.querySelectorAll('.owner-stat')].map(node=>[node.querySelector('span').textContent,node.querySelector('strong').textContent]))`);
+  assert.equal(dashboardStats.Research,String(initialCounts.research));assert.equal(dashboardStats.Courses,String(initialCounts.notes));assert.equal(dashboardStats.Projects,String(initialCounts.projects));
+  assert.equal(dashboardStats['Repository size'],'Unavailable');assert.match(dashboardStats['Uploaded files'],/^\d/);
+  assert.equal(await evaluate(`document.querySelector('[data-owner-pages-status]').textContent`),'Pages: Local development');
+  assert.equal(await evaluate(`[...document.querySelectorAll('.owner-dashboard-publishing a')].some(node=>node.textContent==='View Actions'&&node.href==='https://github.com/Z-hang729/Z-hang-Homepage/actions')`),true);
+  const initialAssetSize=dashboardStats['Uploaded files'];
+  results.checks.push('Dashboard counts match existing content; asset size is separate from unavailable GitHub repository size and deployment');
   await go('/'); await until(`Boolean(document.querySelector('.owner-inline-trigger'))`, 'Restore local edit session');
   await evaluate(`document.querySelector('[data-owner-field="heroFirstLine"] + .owner-inline-trigger').click()`);
   const inline = await evaluate(`document.querySelector('[data-owner-field="heroFirstLine"] input')?.value`);
@@ -161,6 +172,7 @@ try {
   await width(390); await assertModalFits('Upload'); await screenshot('phase2-owner-upload-mobile'); await width(1440);
   await click('Add to draft', activeDialog); await until(`!document.querySelector('dialog[open]')`);
   assert.equal(existsSync(path.join(isolated, 'public/uploads/files/qa-cover.png')), false, 'Upload draft wrote source before publish');
+  assert.notEqual(await evaluate(`[...document.querySelectorAll('.owner-stat')].find(node=>node.querySelector('span').textContent==='Uploaded files').querySelector('strong').textContent`),initialAssetSize,'Dashboard asset size includes unpublished uploads');
   await click('Files', `document.querySelector('.owner-toolbar')`);
   await until(`document.querySelector('.owner-file-manager-list')?.innerText.includes('qa-cover.png')`);
   for (const name of ['README.md','qa-cover.png','qa-paper.pdf']) assert.equal(await evaluate(`[...document.querySelectorAll('.owner-file-manager-row strong')].some(node=>node.textContent===${JSON.stringify(name)})`),true,'Missing uploaded file '+name);
@@ -203,6 +215,67 @@ try {
   assert.equal(readFileSync(path.join(isolated,'public/uploads/files/README.md'),'utf8'), readFileSync(path.join(fixtures,'README.md'),'utf8'));
   assert.equal(existsSync(path.join(isolated,'public/uploads/files/qa-cover.png')),false);
   results.checks.push('Second local batch saves unchanged original asset bytes and renamed path to the disposable copy');
+
+  await evaluate(`document.querySelector('dialog[open]')?.close()`);
+  // Source-watcher reloads may follow a local save. Start the next independent
+  // edit after an explicit navigation and verified restored editing session.
+  await go('/owner/');await until(`document.querySelector('[data-owner-workspace]')?.hidden===false && Boolean(document.querySelector('.owner-toolbar'))`,'Ready for the next isolated editing batch');
+  const courseFolder=path.join(fixtures,'QA folder course');mkdirSync(path.join(courseFolder,'Lectures'),{recursive:true});mkdirSync(path.join(courseFolder,'Figures'),{recursive:true});
+  const courseOverview='# Actual course materials\n\n[Lecture](Lectures/01.md)\n\n[Handout](HW01.pdf)\n';
+  const lecture='# First lecture\n\n$$\\nabla\\cdot\\mathbf B=0$$\n\n![Figure](../Figures/plot.png)\n';
+  writeFileSync(path.join(courseFolder,'README.md'),courseOverview);writeFileSync(path.join(courseFolder,'Lectures','01.md'),lecture);writeFileSync(path.join(courseFolder,'Figures','plot.png'),png);cpSync(path.join(fixtures,'qa-paper.pdf'),path.join(courseFolder,'HW01.pdf'));
+  await click('Upload folder',`document.querySelector('[data-owner-workspace]')`);await until(`${activeDialog}?.getAttribute('aria-label')==='Upload files or a folder'`);
+  await fill('Upload to','notes');await evaluate(`[...${activeDialog}.querySelectorAll('label')].find(node=>node.querySelector('span')?.textContent==='Upload to').querySelector('select').dispatchEvent(new Event('change',{bubbles:true}))`);
+  await until(`${activeDialog}.querySelector('.owner-upload-new-entry')?.hidden===false`);
+  await selectFiles('dialog[open] input[type="file"][webkitdirectory]',[courseFolder]);
+  await until(`document.querySelectorAll('.owner-upload-file:not(.owner-upload-rejected)').length===4 && !${activeDialog}.querySelector('.owner-primary').disabled`,'Actual directory picker reads all course files');
+  assert.equal(await evaluate(`[...${activeDialog}.querySelectorAll('label')].find(node=>node.querySelector('span')?.textContent==='Title / Course name').querySelector('input').value`),'QA folder course');
+  await click('Add to draft',activeDialog);await until(`${activeDialog}.querySelector('.owner-form-status')?.textContent.includes('semester')`,'New course requires confirmed semester');
+  assert.equal(await evaluate(`document.querySelector('[data-owner-change-count]').textContent`),'0 changes');
+  await fill('Semester','2026 Fall');await fill('Category','Space Physics');await width(390);await assertModalFits('New course folder import');await screenshot('phase2-owner-course-import-mobile');
+  await click('Add to draft',activeDialog);await until(`!document.querySelector('dialog[open]') && [...document.querySelectorAll('.owner-entry-row h3')].some(node=>node.textContent==='QA folder course')`,'New course, files and readings join the draft');
+  await width(1440);
+  assert.equal(existsSync(path.join(isolated,'src/content/notes/qa-folder-course/index.md')),false,'Course import wrote a partial parent before publication');
+  assert.equal(await evaluate(`[...document.querySelectorAll('.owner-stat')].find(node=>node.querySelector('span').textContent==='Courses').querySelector('strong').textContent`),String(initialCounts.notes+2));
+  await click('Review & save',`document.querySelector('.owner-toolbar')`);await until(`document.querySelectorAll('dialog[open] .owner-review-file').length===7`,'Parent, four originals and two reading copies are reviewed together');
+  await click('Confirm local save',activeDialog);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='0 changes' && Boolean(document.querySelector('[data-owner-last-saved="saved-local"]'))`,'One course import batch saves to the disposable copy',300);
+  const savedCourse=readFileSync(path.join(isolated,'src/content/notes/qa-folder-course/index.md'),'utf8');assert.match(savedCourse,/semester: 2026 Fall/);assert.match(savedCourse,/category: Space Physics/);assert.match(savedCourse,/\/notes\/qa-folder-course\/files\/Lectures\/01\//);
+  assert.equal(readFileSync(path.join(isolated,'public/uploads/notes/qa-folder-course/Lectures/01.md'),'utf8'),lecture);assert.equal(hash(path.join(isolated,'public/uploads/notes/qa-folder-course/HW01.pdf')),hash(path.join(courseFolder,'HW01.pdf')));
+  assert.match(readFileSync(path.join(isolated,'src/content/notes/qa-folder-course/files/Lectures/01.md'),'utf8'),/\/uploads\/notes\/qa-folder-course\/Figures\/plot.png/);
+  results.checks.push('A real folder picker creates a confirmed course, preserves originals, generates reading pages and saves one reviewed batch');
+
+  await evaluate(`document.querySelector('dialog[open]')?.close()`);
+  const qaProject=`[...document.querySelectorAll('.owner-entry-row')].find(node=>node.querySelector('h3')?.textContent==='QA projects')`;
+  const originalProjectHash=hash(path.join(isolated,'src/content/projects/qa-projects/index.md'));
+  await click('Edit',qaProject);await until(`Boolean(${activeDialog}.querySelector('input[aria-label="Choose cover image"]'))`);
+  await selectFiles('dialog[open] input[aria-label="Choose cover image"]',[path.join(fixtures,'qa-cover.png')]);
+  await until(`${activeDialog}.querySelector('.owner-image-preview img')?.naturalWidth>0 && ${activeDialog}.innerText.includes('Save to draft to include this image.')`,'Image picker previews valid original bytes');
+  const coverURL=await evaluate(`[...${activeDialog}.querySelectorAll('label')].find(node=>node.querySelector('span')?.textContent==='Cover image URL').querySelector('input').value`);
+  await width(390);await assertModalFits('Project cover picker');await screenshot('phase2-owner-cover-picker-mobile');await width(1440);
+  assert.equal(await evaluate(`document.querySelector('[data-owner-change-count]').textContent`),'0 changes','Previewing an image must not stage or publish it');
+  await click('Save to draft',activeDialog);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='2 changes'`,'Cover image and project reference form one draft change');
+  assert.equal(hash(path.join(isolated,'src/content/projects/qa-projects/index.md')),originalProjectHash);assert.equal(existsSync(path.join(isolated,'public',coverURL.replace(/^\//,''))),false);
+  await click('Undo',`document.querySelector('.owner-toolbar')`);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='0 changes'`,'Undo restores the project form before navigating');
+  await go('/projects/');await until(`Boolean(document.querySelector('[data-owner-slug="qa-projects"] .owner-image-trigger'))`,'Card offers direct image editing');
+  await evaluate(`document.querySelector('[data-owner-slug="qa-projects"] .owner-image-trigger').click()`);await until(`${activeDialog}?.getAttribute('aria-label')==='Edit Cover image'`);
+  await selectFiles('dialog[open] input[aria-label="Choose cover image"]',[path.join(fixtures,'qa-cover.png')]);await until(`${activeDialog}.querySelector('.owner-image-preview img')?.naturalWidth>0`);
+  await click('Save image to draft',activeDialog);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='2 changes' && Boolean(document.querySelector('[data-owner-slug="qa-projects"] [data-owner-image="cover"] img'))`,'Direct card upload creates a visible draft');
+  assert.equal(await evaluate(`document.querySelector('[data-owner-slug="qa-projects"] [data-owner-image="cover"] img').src.startsWith('blob:')`),true,'Draft image renders without a premature public URL request');
+  await evaluate(`document.querySelector('[data-owner-slug="qa-projects"] .owner-image-trigger').click()`);await until(`${activeDialog}?.getAttribute('aria-label')==='Edit Cover image'`);
+  await click('Delete',`${activeDialog}.querySelector('.owner-image-field')`);await click('Save image to draft',activeDialog);await until(`!document.querySelector('dialog[open]')`);
+  await click('Undo',`document.querySelector('.owner-toolbar')`);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='2 changes' && document.querySelector('[data-owner-slug="qa-projects"] [data-owner-image="cover"] img')?.hidden===false`,'Undo restores a removed draft cover');
+  await click('Undo',`document.querySelector('.owner-toolbar')`);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='0 changes'`,'Undo restores the original project and removes the unpublished image');
+  assert.equal(hash(path.join(isolated,'src/content/projects/qa-projects/index.md')),originalProjectHash);
+  results.checks.push('Cover upload previews original bytes; the form stages its asset and reference together; direct image removal and Undo keep source unchanged');
+
+  await go('/about/');await until(`Boolean(document.querySelector('[data-owner-image="avatar"] + .owner-image-trigger'))`,'Avatar has a direct owner image control');
+  await evaluate(`document.querySelector('[data-owner-image="avatar"] + .owner-image-trigger').click()`);await until(`${activeDialog}?.getAttribute('aria-label')==='Edit Avatar'`);
+  await selectFiles('dialog[open] input[aria-label="Choose avatar"]',[path.join(fixtures,'qa-cover.png')]);await until(`${activeDialog}.querySelector('.owner-image-preview img')?.naturalWidth>0`);
+  await click('Save image to draft',activeDialog);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='2 changes' && document.querySelector('[data-owner-image="avatar"] img')?.src.startsWith('blob:')`,'Avatar and profile update remain a visible draft');
+  assert.equal(hash(path.join(isolated,'src/data/profile.yaml')),baseline.get('src/data/profile.yaml'));
+  await click('Undo',`document.querySelector('.owner-toolbar')`);await until(`document.querySelector('[data-owner-change-count]')?.textContent==='0 changes'`);
+  assert.equal(hash(path.join(isolated,'src/data/profile.yaml')),baseline.get('src/data/profile.yaml'));
+  results.checks.push('Direct avatar editing previews and stages a profile/image batch, then Undo restores the original profile without writing source');
   assert.equal(results.errors.length, 0, JSON.stringify(results.errors));
   assert.equal(results.badResponses.length, 0, JSON.stringify(results.badResponses));
   results.passed = true;
@@ -214,6 +287,6 @@ try {
   for (const [file, original] of baseline) assert.equal(hash(path.join(root, file)), original, 'Main site unexpectedly changed: ' + file);
   writeFileSync(path.join(qa, 'owner-results.json'), JSON.stringify(results, null, 2));
   socket?.close();
-  if (targetId) await fetch(debugOrigin + '/json/close/' + targetId).catch(() => {});
+  if (targetId && debugOrigin) await fetch(debugOrigin + '/json/close/' + targetId).catch(() => {});
   server.kill(); browser?.kill();
 }

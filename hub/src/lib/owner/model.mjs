@@ -219,6 +219,18 @@ export function uploadAssetChanges(snapshot,{kind,slug,files,target='files',useR
   }
   return changes;
 }
+// Creating the parent, archiving originals and generating reading pages is one
+// reviewed change set. Validate the final set, including generated copies,
+// against the original baseline so no intermediate parent is ever published.
+export function importFolderChanges(snapshot,{kind,metadata,slug,files,useReadme=false,useCover=false,usePaper=false}) {
+  const created=createEntryChanges(snapshot,{kind,metadata,slug,body:''});
+  const createdSlug=created[0].path.split('/')[4];
+  const draft=applyDraftToSnapshot(snapshot,created);
+  const uploaded=uploadAssetChanges(draft,{kind,slug:createdSlug,files,useReadme,useCover,usePaper});
+  const changes=mergeDraftChanges(snapshot,created,uploaded);
+  validateDraftChanges(snapshot,changes);
+  return changes;
+}
 export function moveAssetChanges(snapshot,{from,to,confirmation,updateReferences=true}) {
   if(!from.startsWith('hub/public/uploads/') || !to.startsWith('hub/public/uploads/')) throw ownerError('Only uploaded public files can be renamed or moved.'); const files=filesOf(snapshot),file=files.get(from); if(!file || typeof file.content!=='string') throw ownerError('Load the original asset before moving it.'); if(files.has(to)) throw ownerError('The destination already exists. Existing files are preserved.'); if(confirmation!==from.split('/').pop()) throw ownerError('Confirm the original filename before moving it.','DELETE_CONFIRMATION');
   const changes=[changeFor(snapshot,to,file.content,file.encoding||'base64'),deleteFor(snapshot,from)];

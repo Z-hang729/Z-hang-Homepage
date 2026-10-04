@@ -1,6 +1,6 @@
-# 首版本验证记录
+# 网站验证记录
 
-日期：2026-10-02。这里记录本地已执行的检查；远程仓库创建、GitHub Actions 运行和 Pages 线上部署尚待 GitHub 账号授权。
+首版记录日期：2026-10-02。以下保留各阶段实际结果；真实 GitHub Pages 已于 2026-10-04 发布，见后面的线上记录。早期未验证状态只对应其所在阶段。
 
 ## 源码与功能检查
 
@@ -45,6 +45,12 @@
 
 当前主站完整检查：`npm run check` 无错误；2026-10-04 最新完整 `npm test` 99 项通过、0 项失败；最终构建生成 39 个 HTML 页面，926 处本地链接全部通过。测试包括认证失效、未知发布结果、幂等键冲突和丢失响应后的完整请求保留；同一批次经过多次安全重试只产生一个 commit。这些本地测试不代替真实生产 OAuth 验证。
 
+后续补齐直接文件夹创建、图片编辑与仪表盘后，再次完整执行 `npm test`：114 项通过、0 失败、0 跳过；`npm run check`：90 文件、0 errors、0 warnings、4 个既有 hints。实际 GitHub Pages 子路径构建仍为 39 个页面、926 处链接通过；Pagefind 索引 39 页。189 个构建后的 HTML / JS / JSON 文件未发现 GitHub token / private key 模式。
+
+新测试包含：父条目、原件与阅读页同批生成并统一检查最终限额；错误课程 metadata / 重名 / 路径逃逸拒绝；图片原字节保留、MIME 拒收、同路径替换、科研目录路径保留、正文语法与 MDX 原件保留；仓库统计来源 ID 不匹配拒绝。独立 popup fixture 增至 10 组通过，包含直接创建课程的真实表单与学期确认，`externalPublishing=false`。
+
+主站隔离浏览器检查随后扩展至 13 组并全部通过，保留原 9 组并新增课程目录直接创建 / 7 文件同批保存、封面预览与直接编辑 / 删除 / 同页 Undo、头像直接编辑 / 草稿 / Undo、管理页计数 / 资产 / 本地发布状态。没有 browser 或 HTTP error；正式 profile / homepage 哈希前后一致。每次使用自有独立端口、全新 Chrome profile，结束时关闭测试进程；已查看桌面与手机截图。
+
 `node scripts/owner-browser-qa.mjs` 已通过。测试复制当前 `src/`、`public/` 和配置到 `.local/owner-browser-site-*`，使用独立 Chrome 测试 profile；全部保存发生在该副本。正式 `profile.yaml` 与 `homepage.yaml` 的 SHA-256 前后一致。
 
 - 1440 px 桌面与 390 px 手机的访客页面无编辑控制，手机无页面横向溢出。
@@ -82,3 +88,11 @@
 证据：`.local/qa/public-live/results.json` 与同目录 PNG；临时只读验证脚本位于 `.local/browser-remote-check.mjs`。这些资料都位于忽略目录，不进入公开内容。
 
 此记录对应上述首版 commit。该版本未配置线上编辑后端；后续后端配置、生产 OAuth 和通过编辑器发布的验证应单独追加实际结果，不由静态页面检查推断。
+
+## 真实编辑服务门禁（2026-10-04）
+
+Cloudflare Worker `https://z-hang-owner-cms.zhang-owner-worker.workers.dev` 已成功部署，version `6289870c-a3dd-4179-8cc9-9e73c38f7016`。GitHub App `5184269` 的 installation `167835885` 只选择目标仓库；实际界面核验 webhook 关闭、短期用户令牌到期启用。密钥通过官方 Wrangler stdin 写入，列表仅核验名称。
+
+真实匿名 HTTP 检查 10/10 通过：配置健康、可信 Pages bridge、匿名安全会话、不可信 origin、直接会话访问、跨域写入、匿名同源写入、非导航登录、无效回调，以及导航 OAuth 的正确 Client ID / callback / PKCE S256 / Secure + HttpOnly + SameSite=Lax Cookie。仅校验响应，不记录 Cookie、OAuth state、token 或完整响应体，也未写入网站内容。
+
+证据在根目录忽略文件 `.local/backend-production-smoke.json`。这些结果验证真实服务可用及匿名拒绝；不能代替 Owner 登录与实际远程发布。
