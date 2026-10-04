@@ -1,6 +1,7 @@
 ---
 import {getCollection} from 'astro:content';
 import Archive from '../../components/Archive.astro';
-const entries=(await getCollection('notes')).sort((a,b)=>+new Date(b.data.updated)-+new Date(a.data.updated));
+import {sortLatest} from '../../lib/content';
+const entries=sortLatest(await getCollection('notes'));
 ---
 <Archive kind="notes" entries={entries}/>

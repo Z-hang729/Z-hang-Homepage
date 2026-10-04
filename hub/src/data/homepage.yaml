@@ -1,0 +1,10 @@
+sections:
+  - { id: hero, order: 0, visible: true }
+  - { id: current-focus, order: 1, visible: true }
+  - { id: about, order: 2, visible: true }
+  - { id: research, order: 3, visible: true }
+  - { id: research-updates, order: 4, visible: true }
+  - { id: notes, order: 5, visible: true }
+  - { id: timeline, order: 6, visible: true }
+  - { id: projects, order: 7, visible: true }
+  - { id: contact, order: 8, visible: true }

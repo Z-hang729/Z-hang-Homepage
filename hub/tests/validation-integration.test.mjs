@@ -22,7 +22,7 @@ test('a real folder import retains names and nested relative links, then passes 
   await writeFile(path.join(source, 'Homework', 'HW01.md'), '# Homework\n\n[Lecture](../Lecture01.md)\n');
   await writeFile(path.join(source, 'Chapter', 'index.md'), '# Chapter overview\n\n[Lecture](../Lecture01.md)\n');
   await writeFile(path.join(source, 'Extra.mdx'), '# MDX source\n\nexport const x = 1;\n\n<div>Plain source display</div>\n');
-  await writeFile(path.join(source, 'Figures', '图 01.png'), 'image fixture');
+  await writeFile(path.join(source, 'Figures', '图 01.png'), Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a7h8AAAAASUVORK5CYII=', 'base64'));
   await writeFile(path.join(source, 'raw.fits'), 'raw scientific data');
   await writeFile(path.join(source, '.env'), 'SECRET=private');
   const imported = await importFolder({ root, source, kind: 'research', metadata: { title: 'Working research', date: '2026-10-01', updated: '2026-10-02' } });

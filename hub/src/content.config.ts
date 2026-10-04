@@ -16,10 +16,14 @@ const safeURL = z.string().refine((value) => {
 }, 'Use an http(s), mailto, root-relative URL, or fragment');
 
 const attachment = z.object({ title: z.string().min(1), url: safeURL, type: z.string().optional() });
-const reference = z.object({ title: z.string().min(1), url: safeURL.optional() });
+const reference = z.object({ title: z.string().min(1), url: safeURL.optional(),
+  authors: z.array(z.string()).default([]), year: z.union([z.number().int(), z.string()]).optional(),
+  doi: z.string().optional(), bibtex: z.string().optional(),
+});
 const common = {
   title: z.string().min(1), description: z.string().min(1), date, updated: date,
   tags: z.array(z.string().min(1)).default([]), featured: z.boolean().default(false), demo: z.boolean().default(false),
+  order: z.number().int().nonnegative().default(0),
   cover: safeURL.optional(), authors: z.array(z.string()).default([]),
   github: safeURL.optional(), paper: safeURL.optional(), data: safeURL.optional(),
   links: z.array(z.object({ title: z.string().min(1), url: safeURL })).default([]),
@@ -39,13 +43,17 @@ const notes = defineCollection({ loader: collectionLoader('notes'), schema: z.ob
   category: z.enum(['Space Physics', 'Physics', 'Mathematics', 'Computer Science', 'General Education', 'Others']),
   semester: z.string().min(1), course: z.string().min(1), progress: z.number().min(0).max(100).default(0),
   instructor: z.string().optional(),
+  courseCode: z.string().optional(), year: z.union([z.number().int(), z.string()]).optional(), courseType: z.string().optional(),
 }).superRefine(orderedDates) });
 const projects = defineCollection({ loader: collectionLoader('projects'), schema: z.object({ ...common,
   techStack: z.array(z.string()).default([]),
+  status: z.enum(['Planning', 'In Progress', 'Completed', 'Paused']).default('Planning'),
+  demoUrl: safeURL.optional(), documentation: safeURL.optional(),
 }).superRefine(orderedDates) });
 const logs = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/logs' }), schema: z.object({
   title: z.string().min(1), project: z.string().regex(/^[\p{L}\p{N}_-]+$/u), date,
   tags: z.array(z.string()).default([]), demo: z.boolean().default(false), description: z.string().optional(),
+  attachments: z.array(attachment).default([]),
 }) });
 const publications = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/publications' }), schema: z.object({
   title: z.string().min(1), type: z.enum(['Paper', 'Conference', 'Poster', 'Talk', 'Software', 'Dataset']),

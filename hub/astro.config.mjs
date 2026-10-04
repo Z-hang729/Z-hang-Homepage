@@ -9,6 +9,7 @@ import { localAdminPlugin } from "./scripts/admin-plugin.mjs";
 import { unified } from "@astrojs/markdown-remark";
 import idl from "./scripts/idl-language.mjs";
 import { pagefindDevPlugin } from "./scripts/pagefind-dev.mjs";
+import { ownerLocalPlugin } from "./scripts/owner-local-plugin.mjs";
 export default defineConfig({
   site: process.env.SITE_URL || "https://example.com",
   base: process.env.SITE_BASE_PATH || "/",
@@ -38,6 +39,6 @@ export default defineConfig({
       ],
     },
   },
-  vite: { plugins: [localAdminPlugin(), pagefindDevPlugin()] },
+  vite: { plugins: [localAdminPlugin(), pagefindDevPlugin(), ownerLocalPlugin()] },
   devToolbar: { enabled: false },
 });

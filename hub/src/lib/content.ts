@@ -14,8 +14,8 @@ export function readingMinutes(body = ''): number {
 }
 export function tagSlug(tag: string): string { return tag.normalize('NFKC').toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, ''); }
 export function entryPath(entry: Pick<HubEntry, 'collection' | 'id'>): string { return `/${entry.collection}/${entry.id}/`; }
-export function sortLatest<T extends { data: { updated?: Date | string; date: Date | string } }>(items: T[]): T[] {
-  return [...items].sort((a, b) => +new Date(b.data.updated || b.data.date) - +new Date(a.data.updated || a.data.date));
+export function sortLatest<T extends { data: { order?: number; updated?: Date | string; date: Date | string } }>(items: T[]): T[] {
+  return [...items].sort((a, b) => (a.data.order || 0) - (b.data.order || 0) || +new Date(b.data.updated || b.data.date) - +new Date(a.data.updated || a.data.date));
 }
 export async function allEntries(): Promise<HubEntry[]> {
   const [research, notes, projects] = await Promise.all([getCollection('research'), getCollection('notes'), getCollection('projects')]);

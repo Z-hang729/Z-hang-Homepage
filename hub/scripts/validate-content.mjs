@@ -3,11 +3,12 @@ import { readdir, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
+import { validateData as validateOwnerData, validateAsset } from '../src/lib/owner/policy.mjs';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const collections = ['research', 'notes', 'projects'];
-const urlKeys = new Set(['url', 'href', 'cover', 'avatar', 'cvPdf', 'github', 'paper', 'data', 'demo', 'documentation', 'source', 'download']);
-const excludedData = /\.(?:fits?|fts|sav|zip|tar|gz|7z|mp4|mov|avi|mkv|webm)$/i;
+const urlKeys = new Set(['url', 'href', 'cover', 'avatar', 'cvPdf', 'github', 'paper', 'data', 'demoUrl', 'documentation', 'source', 'download']);
+const excludedData = /\.(?:sav|tar|gz|7z|mp4|mov|avi|mkv|webm)$/i;
 export const MAX_ASSET_BYTES = 10 * 1024 * 1024;
 
 async function exists(file) {
@@ -85,7 +86,7 @@ export async function validateContent(rootDir = process.cwd()) {
   const errors = [];
   const warnings = [];
   const entries = [];
-  const routes = new Set(['/', '/about', '/cv', '/search', '/publications', '/changelog', '/research', '/notes', '/projects', '/tags', '/admin', '/rss.xml', '/robots.txt', '/sitemap-index.xml', '/sitemap-0.xml']);
+  const routes = new Set(['/', '/about', '/cv', '/search', '/publications', '/changelog', '/research', '/notes', '/projects', '/tags', '/admin', '/owner', '/rss.xml', '/robots.txt', '/sitemap-index.xml', '/sitemap-0.xml']);
   const relative = file => path.relative(root, file).replaceAll(path.sep, '/');
   const report = (file, message) => errors.push(`${relative(file)}: ${message}`);
   const requireText = (data, key, file) => {
@@ -213,12 +214,17 @@ export async function validateContent(rootDir = process.cwd()) {
   for (const file of (await walk(path.join(root, 'src', 'data'))).filter(file => /\.ya?ml$/i.test(file) && file !== profileFile)) {
     try {
       const data = YAML.parse(await readFile(file, 'utf8'), { uniqueKeys: true });
+      if (/homepage\.yaml$/.test(file)) validateOwnerData('hub/src/data/homepage.yaml', data);
       for (const { key, value } of collectUrls(data)) await checkUrl(value, file, key);
     } catch (error) { report(file, error.message); }
   }
   for (const file of await walk(path.join(root, 'public'))) {
     if (excludedData.test(file)) report(file, 'raw scientific data, archives and videos belong in external storage; publish a download link instead');
     if ((await stat(file)).size > MAX_ASSET_BYTES) report(file, 'file exceeds the 10 MiB repository asset limit');
+    if (relative(file).startsWith('public/uploads/') || /\.(?:fits?|fts|zip)$/i.test(file)) {
+      try { validateAsset('hub/public/uploads/files/' + path.basename(file), new Uint8Array(await readFile(file))); }
+      catch (error) { report(file, error.message); }
+    }
   }
   if (!profile?.email && !profile?.github) warnings.push('Public contact details are intentionally empty; add only details you choose to publish.');
   return { errors, warnings, entries };

@@ -1,0 +1,25 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "zhang-owner-cms",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-03",
+  "workers_dev": true,
+  "durable_objects": {
+    "bindings": [{ "name": "OWNER_REPOSITORY", "class_name": "OwnerRepository" }]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["OwnerRepository"] }],
+  "vars": {
+    "OWNER_GITHUB_ID": "326471613",
+    "REPO_OWNER": "Z-hang729",
+    "REPO_NAME": "Z-hang-Homepage",
+    "BRANCH": "main",
+    "WORKER_ORIGIN": "https://zhang-owner-cms.REPLACE-WORKERS-SUBDOMAIN.workers.dev",
+    "ALLOWED_SITE_ORIGINS": "[\"https://z-hang729.github.io\"]",
+    "GITHUB_APP_ID": "REPLACE_APP_ID",
+    "GITHUB_CLIENT_ID": "REPLACE_CLIENT_ID",
+    "GITHUB_INSTALLATION_ID": "REPLACE_INSTALLATION_ID",
+    "TARGET_REPOSITORY_ID": "REPLACE_REPOSITORY_ID"
+  }
+  // Set GITHUB_CLIENT_SECRET and SESSION_ENCRYPTION_KEY using Worker Secrets.
+  // Never put either secret into this file, PUBLIC_* vars, Pages or frontend code.
+}

@@ -3,17 +3,55 @@ import '../styles/global.css';
 import 'katex/dist/katex.min.css';
 import Icon from '../components/Icon.astro';
 import { profile, navigation, url, siteConfig } from '../lib/site';
-interface Props {title?:string; description?:string; ogImage?:string;}
-const {title='An academic garden',description=profile.bio,ogImage='/images/social-card.svg'}=Astro.props;
-const canonical=new URL(Astro.url.pathname,Astro.site);
-const current=Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/,''),'') || '/';
-const structured={ '@context':'https://schema.org','@type':'Person',name:profile.displayName,description:profile.bio,affiliation:{'@type':'CollegeOrUniversity',name:profile.university},url:new URL(url('/'),Astro.site).href };
+interface Props { title?: string; description?: string; ogImage?: string; }
+const { title = 'An academic garden', description = profile.bio, ogImage = '/images/social-card.svg' } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const current = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ''), '') || '/';
+const structured = { '@context': 'https://schema.org', '@type': 'Person', name: profile.displayName, description: profile.bio,
+  affiliation: { '@type': 'CollegeOrUniversity', name: profile.university }, url: new URL(url('/'), Astro.site).href };
+const ownerBackend = import.meta.env.PUBLIC_OWNER_BACKEND_URL || '';
 ---
-<!doctype html><html lang="en" data-theme="light"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/><meta name="color-scheme" content="light dark"/><title>{title} · {profile.displayName}</title><meta name="description" content={description}/><link rel="canonical" href={canonical}/><link rel="icon" type="image/svg+xml" href={url('/icons/favicon.svg')}/><link rel="alternate" type="application/rss+xml" title={`${profile.displayName} research & notes`} href={url('/rss.xml')}/><meta property="og:title" content={`${title} · ${profile.displayName}`}/><meta property="og:description" content={description}/><meta property="og:type" content="website"/><meta property="og:url" content={canonical}/><meta property="og:image" content={new URL(url(ogImage),Astro.site).href}/><meta name="twitter:card" content="summary_large_image"/><script type="application/ld+json" set:html={JSON.stringify(structured).replace(/</g,'\u003c')}/>
-<script is:inline>try{document.documentElement.dataset.theme=localStorage.getItem('zh-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch{}</script></head>
-<body><a class="skip-link" href="#main">Skip to content</a><header class="site-header" data-pagefind-ignore><div class="header-inner"><a class="wordmark" href={url('/')} aria-label={`${profile.displayName}, home`}><span class="logo-symbol">Z<svg viewBox="0 0 40 40" aria-hidden="true"><ellipse cx="20" cy="20" rx="23" ry="10" transform="rotate(-35 20 20)"/></svg></span><span>{profile.displayName}<span class="logo-dot">.</span></span></a><nav id="main-nav" aria-label="Main navigation">{navigation.map(item=><a href={url(item.href)} aria-current={(item.href==='/' ? current==='/' : current.startsWith(item.href))?'page':undefined}>{item.label}</a>)}</nav><div class="header-actions"><button class="search-trigger" data-search-open aria-label="Search the website"><Icon name="search" size={17}/><span>Search</span><kbd>⌘ K</kbd></button>{profile.github && <a class="icon-button" href={profile.github} aria-label="GitHub"><Icon name="github"/></a>}{profile.email && <a class="icon-button" href={`mailto:${profile.email}`} aria-label="Email"><Icon name="mail"/></a>}<button class="icon-button theme-toggle" aria-label="Switch color theme" title="Switch color theme"><Icon name="sun"/></button><button class="icon-button menu-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Toggle navigation"><Icon name="menu"/></button></div></div></header>
-<main id="main" data-pagefind-body><slot/></main>
-<footer class="site-footer" data-pagefind-ignore><div class="footer-top"><a class="footer-name" href={url('/')}>{profile.displayName}<span>.</span></a><p>{profile.tagline}</p><a class="back-top" href="#main">Back to top ↑</a></div><div class="footer-bottom"><span>{profile.degree} × {profile.secondDegreeShort}</span><div><a href={url('/rss.xml')}>RSS</a><a href={url('/publications/')}>Publications</a><a href={url('/changelog/')}>Changelog</a>{siteConfig.repo && <a href={siteConfig.repo}>Source on GitHub ↗</a>}</div><span>Built with Astro · Updated {profile.lastUpdated}</span></div></footer>
-<dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title" data-pagefind-ignore><div class="search-heading"><div><p class="eyebrow">ACROSS THE GARDEN</p><h2 id="search-title">Find an idea.</h2></div><button class="icon-button" data-search-close aria-label="Close search">×</button></div><div id="global-search"></div><p class="search-hint" id="search-hint">Search research, notes, projects, and tags. Press Esc to close.</p></dialog><div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script>import '../scripts/site-client';</script>
-</body></html>
+<!doctype html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+    <meta name="color-scheme" content="light dark"/>
+    <meta name="owner-backend" content={ownerBackend}/><meta name="owner-local" content={String(import.meta.env.DEV)}/>
+    <title>{title} · {profile.displayName}</title><meta name="description" content={description}/>
+    <link rel="canonical" href={canonical}/><link rel="icon" type="image/svg+xml" href={url('/icons/favicon.svg')}/>
+    <link rel="alternate" type="application/rss+xml" title={`${profile.displayName} research & notes`} href={url('/rss.xml')}/>
+    <meta property="og:title" content={`${title} · ${profile.displayName}`}/><meta property="og:description" content={description}/>
+    <meta property="og:type" content="website"/><meta property="og:url" content={canonical}/>
+    <meta property="og:image" content={new URL(url(ogImage), Astro.site).href}/><meta name="twitter:card" content="summary_large_image"/>
+    <script type="application/ld+json" set:html={JSON.stringify(structured).replace(/</g, '\u003c')}/>
+    <script is:inline>try{document.documentElement.dataset.theme=localStorage.getItem('zh-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch{}</script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+    <header class="site-header" data-pagefind-ignore>
+      <div class="header-inner">
+        <a class="wordmark" href={url('/')} aria-label={`${profile.displayName}, home`}>
+          <span class="logo-symbol">Z<svg viewBox="0 0 40 40" aria-hidden="true"><ellipse cx="20" cy="20" rx="23" ry="10" transform="rotate(-35 20 20)"/></svg></span>
+          <span><span data-owner-field="displayName">{profile.displayName}</span><span class="logo-dot">.</span></span>
+        </a>
+        <nav id="main-nav" aria-label="Main navigation">{navigation.map(item => <a href={url(item.href)} aria-current={(item.href === '/' ? current === '/' : current.startsWith(item.href)) ? 'page' : undefined}>{item.label}</a>)}</nav>
+        <div class="header-actions">
+          <button class="search-trigger" data-search-open aria-label="Search the website"><Icon name="search" size={17}/><span>Search</span><kbd>⌘ K</kbd></button>
+          {profile.github && <a class="icon-button" href={profile.github} aria-label="GitHub"><Icon name="github"/></a>}
+          {profile.email && <a class="icon-button" href={`mailto:${profile.email}`} aria-label="Email"><Icon name="mail"/></a>}
+          <button class="icon-button theme-toggle" aria-label="Switch color theme" title="Switch color theme"><Icon name="sun"/></button>
+          <button class="icon-button menu-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Toggle navigation"><Icon name="menu"/></button>
+        </div>
+      </div>
+    </header>
+    <main id="main" data-pagefind-body><slot/></main>
+    <footer class="site-footer" data-pagefind-ignore>
+      <div class="footer-top"><a class="footer-name" href={url('/')}><span data-owner-field="displayName">{profile.displayName}</span><span>.</span></a><p data-owner-field="tagline">{profile.tagline}</p><a class="back-top" href="#main">Back to top ↑</a></div>
+      <div class="footer-bottom"><span><span data-owner-field="degree">{profile.degree}</span> × <span data-owner-field="secondDegreeShort">{profile.secondDegreeShort}</span></span><div><a href={url('/rss.xml')}>RSS</a><a href={url('/publications/')}>Publications</a><a href={url('/changelog/')}>Changelog</a>{siteConfig.repo && <a href={siteConfig.repo}>Source on GitHub ↗</a>}<a href={url('/owner/')} data-owner-login>Owner sign in</a></div><span>Built with Astro · Updated {profile.lastUpdated}</span></div>
+    </footer>
+    <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title" data-pagefind-ignore><div class="search-heading"><div><p class="eyebrow">ACROSS THE GARDEN</p><h2 id="search-title">Find an idea.</h2></div><button class="icon-button" data-search-close aria-label="Close search">×</button></div><div id="global-search"></div><p class="search-hint" id="search-hint">Search research, notes, projects, and tags. Press Esc to close.</p></dialog>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script>import '../scripts/site-client';</script>
+    <script>import '../scripts/owner-bootstrap';</script>
+  </body>
+</html>

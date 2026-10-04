@@ -1,0 +1,4 @@
+# Configure with actual values in a local ignored .dev.vars file or Worker Secrets.
+# No GitHub token or App private key is required.
+GITHUB_CLIENT_SECRET=REPLACE_WITH_GITHUB_APP_CLIENT_SECRET
+SESSION_ENCRYPTION_KEY=REPLACE_WITH_64_RANDOM_HEXADECIMAL_CHARACTERS

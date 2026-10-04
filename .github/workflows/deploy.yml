@@ -49,6 +49,7 @@ jobs:
           SITE_URL: ${{ vars.SITE_URL || steps.pages.outputs.origin }}
           SITE_BASE_PATH: ${{ vars.SITE_BASE_PATH || steps.pages.outputs.base_path || '/' }}
           REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+          PUBLIC_OWNER_BACKEND_URL: ${{ vars.PUBLIC_OWNER_BACKEND_URL }}
         run: npm run build
       - name: Upload static website
         if: github.event_name != 'pull_request'

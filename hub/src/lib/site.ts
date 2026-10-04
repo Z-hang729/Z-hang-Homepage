@@ -2,6 +2,8 @@ import YAML from "yaml";
 import profileSource from '../data/profile.yaml?raw';
 import navigationSource from '../data/navigation.yaml?raw';
 import changelogSource from '../data/changelog.yaml?raw';
+import homepageSource from '../data/homepage.yaml?raw';
+import { DEFAULT_HOMEPAGE, HOMEPAGE_SECTION_IDS } from './owner/policy.mjs';
 const profileData = YAML.parse(profileSource);
 export const profile = {
   tagline: '',
@@ -25,6 +27,12 @@ export const profile = {
 };
 export const navigation = YAML.parse(navigationSource) as { label: string; href: string }[];
 export const changelog = YAML.parse(changelogSource) as { date: string; title: string; description: string }[];
+export type HomepageSection = { id: string; order: number; visible: boolean; title?: string };
+const homepageData = YAML.parse(homepageSource);
+export const homepageSections: HomepageSection[] = (
+  Array.isArray(homepageData?.sections) ? homepageData.sections : DEFAULT_HOMEPAGE.sections
+).filter((section: HomepageSection) => HOMEPAGE_SECTION_IDS.includes(section.id))
+  .sort((a: HomepageSection, b: HomepageSection) => a.order - b.order);
 export const siteConfig = {
   site: process.env.SITE_URL || "https://example.com",
   base: import.meta.env.BASE_URL,

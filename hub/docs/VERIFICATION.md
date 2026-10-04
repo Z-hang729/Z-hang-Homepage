@@ -40,3 +40,24 @@
 - Astro / MDX 会显示 head-inject 指令的打包提示；实际 MDX 学术组件、数学和图表已通过页面验证。
 - 外部资源是否允许下载、内嵌或匿名访问由提供方决定；本地链接检查不代替外站可达性检查。
 - 本地通过构建不代表线上已发布。远程发布后需要按 Deployment 文档再次验证真实网站地址。
+
+## Phase 2 浏览器检查（2026-10-04）
+
+当前主站完整检查：`npm run check` 无错误；`npm test` 80 项通过；最终构建生成 39 个 HTML 页面，926 处本地链接全部通过。上述是本地构建与检查结果，生产 OAuth 尚未配置。
+
+`node scripts/owner-browser-qa.mjs` 已通过。测试复制当前 `src/`、`public/` 和配置到 `.local/owner-browser-site-*`，使用独立 Chrome 测试 profile；全部保存发生在该副本。正式 `profile.yaml` 与 `homepage.yaml` 的 SHA-256 前后一致。
+
+- 1440 px 桌面与 390 px 手机的访客页面无编辑控制，手机无页面横向溢出。
+- 本地登录显示 `LOCAL EDIT`；主页 inline 修改只进入草稿，刷新后恢复，Undo 和 Discard 正常。
+- Research、Notes、Projects 表单实际创建草稿；公式、表格和代码即时预览正常。主页区块排序与三个条目组成同一审查批次。
+- 第一批本地保存后核对明确 `saved-local` 成功记录、IndexedDB 中的确认结果、零剩余变更和实际文件。Astro 自动刷新后不会误报冲突或再次保存该批次。
+- 通过真实浏览器文件选择输入导入 README、PNG、PDF；Files 列出原文件，改名与移动正常，不当 MIME 的图片替换被拒绝。
+- 课程子阅读笔记实际新增、编辑与删除；错误的确认标题拒绝删除，正确标题可删除阅读页并保留原件归档。
+- 第二批保存后 PNG / PDF 的 SHA-256 与上传原件一致，README 原文一致，移动前的旧附件路径不存在。
+- 手机上传、子笔记编辑和批量审查窗口均无横向溢出；已查看截图。全轮没有浏览器异常、console error 或 HTTP 400 及以上失败请求。
+
+证据：`.local/qa/owner-results.json`、`owner-run.log` 与 `phase2-*.png`。截图和夹具均在忽略目录内，不进入公开内容。
+
+`owner-backend/` 的 `npm run test:browser` 另有 9 项通过：保留目录层次、排除文件确认、草稿上传、输入文件名确认移动、内容链接迁移、阻止删除引用附件，以及真实顶层 popup 的 bridge RPC、CSRF 隔离和不可信窗口来源拒绝。此测试使用本地模拟服务，`externalPublishing=false`。
+
+这些结果验证本地编辑与连接窗口机制。真实 GitHub owner OAuth、远程 commit、Actions / Pages 和生产两种身份的流程仍需独立验证；未据此声称 GitHub 已发布。

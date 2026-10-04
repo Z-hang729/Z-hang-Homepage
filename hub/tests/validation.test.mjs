@@ -84,12 +84,12 @@ test('imported reading routes require their real Markdown source file', async t 
   assert.deepEqual((await validateContent(root)).errors, []);
 });
 
-test('raw FITS and large repository assets are rejected', async t => {
+test('invalid FITS signatures and large repository assets are rejected', async t => {
   const { root, put } = await fixture(t);
   await put('public/uploads/raw.fits', 'science data');
   await put('public/uploads/large.pdf', Buffer.alloc(10 * 1024 * 1024 + 1));
   const result = await validateContent(root);
-  assert.ok(result.errors.some(error => error.includes('external storage')));
+  assert.ok(result.errors.some(error => error.includes('do not match .fits')));
   assert.ok(result.errors.some(error => error.includes('10 MiB')));
 });
 

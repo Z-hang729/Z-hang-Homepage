@@ -2,9 +2,11 @@
 
 面向长期积累的 **Personal Academic Hub + Research Archive + Digital Garden**。采用 Astro 静态生成、TypeScript、Markdown / MDX、YAML、KaTeX、Mermaid 与 Pagefind；公开站点不需要数据库、账号服务或服务器运行时。第一版 UI 使用英文，内容可中文、英文混排。
 
-本站源码位于现有 `academic-site` 仓库的 `hub/`。上一级现有网站、`db/`、`.local/`、历史构建与 Sites 配置保留原样。新 GitHub Pages 工作流只构建和发布 `hub/dist/`。历史内容迁移是后续独立步骤，不会自动联网抓取或替换旧网站。
+本站源码位于 `academic-site` 仓库的 `hub/`。按网站所有者的要求，旧版网站源码与页面已从当前目录删除，历史版本仅在本地备份分支保留；本站不迁移或参考旧内容。GitHub Pages 工作流构建和发布 `hub/dist/`，Sites 发布相同新站的预览版本。
 
 本次发布目标为普通仓库 `Z-hang729/Z-hang-Homepage`。具体配置与授权后的操作见 [Deployment](docs/DEPLOYMENT.md)，已执行的检查见 [Verification](docs/VERIFICATION.md)。
+
+Phase 2 已加入主页编辑、结构化表单、Markdown 预览、目录与附件管理、草稿恢复和一次提交整批变更。使用方式与线上配置见 [Owner CMS](docs/OWNER-CMS.md)，身份、文件与发布保护见 [Security](docs/SECURITY.md)。
 
 ## Quick Start
 
@@ -43,6 +45,7 @@ npm run preview
 | `/publications/` | 未来论文、报告、软件与数据成果入口 |
 | `/rss.xml`、`/changelog/` | 更新订阅与网站变更记录 |
 | `/admin/` | 本地管理入口；公开构建没有写入服务 |
+| `/owner/` | Owner 编辑入口；线上连接 GitHub 认证后端，本地提供隔离的开发编辑服务 |
 
 所有示例科研、课程和项目通过 `demo: true` 明确标注为 **Demo**，不代表本人已经取得的研究成果。未提供的联系方式、头像、CV 与成果保持空值，UI 不生成虚假的个人链接。
 
@@ -72,7 +75,7 @@ academic-site/                 # 原有 Git 仓库
 │   ├── tests/
 │   ├── docs/
 │   └── dist/                  # 自动生成，不手改
-└── ...                        # 原有站点与数据保留
+└── .openai/hosting.json        # Sites 预览发布配置；不使用旧数据库
 ```
 
 ## Edit Profile

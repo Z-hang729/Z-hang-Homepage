@@ -1,0 +1,20 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {url} from '../lib/site';
+const local=import.meta.env.DEV;
+const backend=import.meta.env.PUBLIC_OWNER_BACKEND_URL||'';
+---
+<BaseLayout title="Owner workspace" description="Manage your academic website.">
+  <div class="container owner-entry" data-owner-dashboard data-owner-backend={backend} data-owner-local={String(local)}>
+    <div data-owner-login>
+      <p class="eyebrow">OWNER WORKSPACE</p><h1>Your academic garden.</h1>
+      <p class="intro-description">Sign in to edit your homepage, organize research and notes, and review changes before publishing.</p>
+      <div class="owner-login-actions"><button class="button" data-owner-sign-in disabled>Sign in with GitHub</button>{local&&<button class="button-secondary" data-owner-local-login disabled>Edit this local copy</button>}<a class="text-link" href={url('/')}>Return to the website</a></div>
+      {!backend&&<p class="owner-setup-note">Secure online sign-in has not been configured yet.</p>}
+      <p data-owner-login-status role="status" aria-live="polite">Loading editor…</p>
+    </div><div data-owner-workspace hidden></div>
+  </div>
+</BaseLayout>
+<style>
+  .owner-entry{padding:4rem 0;min-height:65vh}.owner-entry h1{font-size:clamp(2.5rem,6vw,4rem);letter-spacing:-.04em;margin:.7rem 0 1rem}.owner-login-actions{display:flex;flex-wrap:wrap;align-items:center;gap:1rem;margin:2rem 0}.owner-setup-note{font-size:.9rem;color:var(--muted);max-width:55ch}[data-owner-login-status]{min-height:1.5rem;color:var(--accent)}
+</style>
