@@ -4,12 +4,13 @@
 
 ## 目标与当前部署状态
 
-- 目标仓库：`Z-hang729/Z-hang-Homepage`。
-- 目标 Pages 地址：`https://Z-hang729.github.io/Z-hang-Homepage/`。
+- 仓库：[`Z-hang729/Z-hang-Homepage`](https://github.com/Z-hang729/Z-hang-Homepage)，已按所有者确认改为公开。
+- Pages：[`https://z-hang729.github.io/Z-hang-Homepage/`](https://z-hang729.github.io/Z-hang-Homepage/)，2026-10-04 已真实部署并通过浏览器检查；首版 commit 为 `d0da71da523efffb82cac8dc5ac3e8d7447e7b16`。
 - GitHub 账号数字 ID：`326471613`，于 2026-10-03 通过公开 `GET https://api.github.com/users/Z-hang729` 核实。数字 ID 用于服务端 owner allowlist；用户名用于展示。
-- 公开目标仓库 API 在同日返回 404。这个结果无法区分仓库尚未创建与私有仓库不可匿名访问，不能据此声称仓库或 Pages 已发布。
-- 用户已在浏览器登录 GitHub。本次执行环境没有 Browser / Chrome 控制桥接；通用 Node REPL 不能直接控制现有登录浏览器。未读取 cookie、浏览器 profile、token 或凭证文件。
-- GitHub App 注册、仓库安装、平台 secret、生产 OAuth、Actions 和 Pages 必须在真实资源上完成并验证后，才能认定生产部署完成。
+- Repository ID 为 `1404136587`，已通过本人账号访问的官方 API 核实；较早的匿名 404 对应仓库当时的私有状态。
+- 使用官方 Git Credential Manager 完成账号连接；桌面界面操作使用 Windows 辅助功能，不读取用户浏览器 cookie 或凭据数据库。
+- Sites 的原地址已用新站完整替换，保持原有仅所有者可访问的设置；新站不使用旧 D1 / R2 内容。预览地址为 [`https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/`](https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/)。
+- GitHub App 已创建，ID `5184269`、slug `z-hang-homepage-owner-cms`；后台实际部署地址为 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`。安装与密钥配置完成前，后台返回 `503 NOT_CONFIGURED`，公开站仍可正常阅读。生产 OAuth 与实际 Owner 发布闭环尚需独立验证。
 
 ## 架构
 

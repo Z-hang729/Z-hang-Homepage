@@ -43,7 +43,7 @@
 
 ## Phase 2 浏览器检查（2026-10-04）
 
-当前主站完整检查：`npm run check` 无错误；`npm test` 80 项通过；最终构建生成 39 个 HTML 页面，926 处本地链接全部通过。上述是本地构建与检查结果，生产 OAuth 尚未配置。
+当前主站完整检查：`npm run check` 无错误；2026-10-04 最新完整 `npm test` 99 项通过、0 项失败；最终构建生成 39 个 HTML 页面，926 处本地链接全部通过。测试包括认证失效、未知发布结果、幂等键冲突和丢失响应后的完整请求保留；同一批次经过多次安全重试只产生一个 commit。这些本地测试不代替真实生产 OAuth 验证。
 
 `node scripts/owner-browser-qa.mjs` 已通过。测试复制当前 `src/`、`public/` 和配置到 `.local/owner-browser-site-*`，使用独立 Chrome 测试 profile；全部保存发生在该副本。正式 `profile.yaml` 与 `homepage.yaml` 的 SHA-256 前后一致。
 
@@ -60,4 +60,25 @@
 
 `owner-backend/` 的 `npm run test:browser` 另有 9 项通过：保留目录层次、排除文件确认、草稿上传、输入文件名确认移动、内容链接迁移、阻止删除引用附件，以及真实顶层 popup 的 bridge RPC、CSRF 隔离和不可信窗口来源拒绝。此测试使用本地模拟服务，`externalPublishing=false`。
 
-这些结果验证本地编辑与连接窗口机制。真实 GitHub owner OAuth、远程 commit、Actions / Pages 和生产两种身份的流程仍需独立验证；未据此声称 GitHub 已发布。
+这些结果验证本地编辑与连接窗口机制。真实 GitHub owner OAuth、通过编辑器产生远程 commit 和生产两种身份的流程需独立验证；GitHub Actions / Pages 首版发布与实际访客页面已在下面记录。
+
+## 真实 GitHub Pages 首版验证（2026-10-04）
+
+通过 GitHub 官方公开 API 确认 `Z-hang729/Z-hang-Homepage` 为公开仓库，默认分支为 `main`。Actions [run 37190475493](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37190475493) 的 build 与 deploy jobs 均为 `completed / success`。
+
+- 已发布 commit：`d0da71da523efffb82cac8dc5ac3e8d7447e7b16`。
+- `github-pages` deployment ID：`6838966068`；最新状态 `success`，状态记录时间 `2026-10-04T08:56:10Z`。
+- 实际网址：[https://z-hang729.github.io/Z-hang-Homepage/](https://z-hang729.github.io/Z-hang-Homepage/)。首页 HTTP 200，标题为 `An academic garden · Z-hang`，资源与导航正确使用 `/Z-hang-Homepage/`。
+
+使用新的独立 headless Chrome profile，直接检查上述真实网站，没有读取用户的浏览器 profile、cookie 或 OAuth 窗口。页面验证全部通过：
+
+- 1440 / 1280 / 768 / 390 / 320 px 布局无整体横向溢出；已查看真实桌面与手机截图。
+- 深浅主题切换及刷新保留；Pagefind 输入 `plasma` 实际返回结果，结果链接保留仓库路径前缀。
+- Research 筛选与时间轴、课程阅读页 KaTeX 和 Mermaid 图节点、手机菜单与折叠目录正常。
+- 示例 PDF 返回 HTTP 200、PDF Content-Type 和 `%PDF-` 文件签名；手机提供打开与下载入口。
+- 首页、三类归档、About、CV、Publications、科研和课程阅读页均无 owner 编辑控制。公开 `/admin/` 为只读；`/owner/` 的界面加载完成，生产页面不提供本地登录按钮。
+- 浏览器异常、console error 和 HTTP 400 及以上失败请求均为零。
+
+证据：`.local/qa/public-live/results.json` 与同目录 PNG；临时只读验证脚本位于 `.local/browser-remote-check.mjs`。这些资料都位于忽略目录，不进入公开内容。
+
+此记录对应上述首版 commit。该版本未配置线上编辑后端；后续后端配置、生产 OAuth 和通过编辑器发布的验证应单独追加实际结果，不由静态页面检查推断。

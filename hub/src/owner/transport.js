@@ -11,7 +11,7 @@ export async function connectLocal() {
       const data = await reply.json();
       if (!reply.ok || data.ok === false) {
         const error = new Error(data.error?.message || data.error || `Editing request failed (${reply.status}).`);
-        error.code = data.error?.code; error.status = reply.status; throw error;
+        error.code = data.error?.code || data.code; error.status = reply.status; throw error;
       }
       return data.result ?? data;
     }, close() {},
