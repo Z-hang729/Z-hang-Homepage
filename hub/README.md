@@ -235,7 +235,7 @@ npm run admin
 
 ## GitHub Pages Deploy
 
-当前工作区没有已配置的远程仓库。本次开发不会自动创建仓库、推送或公开个人资料。首次远程发布需确认你的 GitHub 账号、目标仓库与公开范围并完成授权。
+已按所有者授权连接公开仓库 [Z-hang729/Z-hang-Homepage](https://github.com/Z-hang729/Z-hang-Homepage)，由 GitHub Actions 部署至 [正式网站](https://z-hang729.github.io/Z-hang-Homepage/)。[Owner 入口](https://z-hang729.github.io/Z-hang-Homepage/owner/) 已完成真实 GitHub 登录、整批编辑发布和清理验证；详情见 [验证记录](docs/VERIFICATION.md)。以下配置步骤用于复现或迁移。
 
 部署时保留 `academic-site` 作为 Git 根目录，`hub/` 为工作流构建目录。如果以后把 `hub/` 单独迁移成新仓库，需把工作流移入新根目录，并更新 `working-directory`、lockfile 与 artifact 路径。
 

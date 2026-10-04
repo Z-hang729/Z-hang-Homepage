@@ -76,11 +76,14 @@ async function fixture(options = {}) {
     if (path.includes('/git/trees/')) return reply({ tree: trees.get(path.split('/').at(-1)) || [...files.values()], truncated: Boolean(options.truncated) });
     if (path.includes('/git/blobs/')) return reply(blobs.get(path.split('/').at(-1)));
     if (path === '/graphql') {
+      if (options.graphqlError) return reply({errors: [{message: options.graphqlError}]});
       const { input: publication } = JSON.parse(init.body).variables;
       if (options.raceHead) head = options.raceHead;
       if (publication.expectedHeadOid !== head) return reply({ errors: [{ message: 'Expected head oid did not match branch head' }] });
       mutations++;
       assert.equal(publication.branch.repositoryNameWithOwner, 'Z-hang729/Z-hang-Homepage');
+      assert.equal(publication.branch.branchName, 'main');
+      assert.equal(Object.hasOwn(publication.branch, 'refName'), false);
       for (const item of publication.fileChanges.additions) await add(item.path, fromBase64(item.contents));
       for (const item of publication.fileChanges.deletions) files.delete(item.path);
       head = mutations.toString(16).padStart(40, '0');
@@ -272,6 +275,19 @@ test('Deployment status distinguishes commit, build success and exact-SHA Pages 
   options.deployments = [];
   options.jobs = [{ name: 'build', status: 'completed', conclusion: 'failure' }];
   assert.equal((await github.status(sha)).phase, 'build_failed');
+});
+
+test('GitHub commit refusal returns fixed categories without echoing provider content or credentials', async () => {
+  const f = await fixture({graphqlError: `Resource not accessible by integration: ${fakeToken}; private fixture content`});
+  const auth = await f.authenticate();
+  const response = await f.rpc(auth, 'publish', f.params());
+  assert.equal(response.status, 422);
+  const result = await response.json();
+  assert.equal(result.error.code, 'COMMIT_REJECTED');
+  assert.deepEqual(result.error.details.providerCategories, ['PERMISSION']);
+  assert.equal(JSON.stringify(result).includes(fakeToken), false);
+  assert.equal(JSON.stringify(result).includes('private fixture content'), false);
+  assert.equal(f.mutations(), 0);
 });
 
 test('Token encryption authenticates its server session context; App manifest contains only minimal grants', async () => {

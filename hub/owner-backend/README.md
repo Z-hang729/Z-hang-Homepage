@@ -2,7 +2,7 @@
 
 此目录是在既有 Astro / GitHub Pages 网站之外运行的轻量认证后端。公开页面继续由 GitHub Pages 提供；仓库内容仍是唯一长期内容来源。SQLite Durable Object 仅保存短期登录 state、加密会话、限流计数和发布幂等记录。没有第二套内容数据库。
 
-当前代码已通过 11 项 GitHub API mock 集成测试、27 项前端发布恢复测试、Wrangler dry-run 打包、本地真实 workerd + SQLite Durable Object smoke test，以及 10 项独立浏览器上传 / 文件管理 / popup bridge 检查。主站完整测试现为 114 项通过；隔离主站浏览器检查 13 组通过。Worker 已配置并真实部署到 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，version `6289870c-a3dd-4179-8cc9-9e73c38f7016`，10 项线上匿名门禁检查通过。实际 Owner OAuth 与通过网页提交、上线仍需独立验证。界面配置使用标准 Windows 辅助功能操作专用窗口，无需 GitHub 插件，也不读取浏览器 cookie / 凭据数据库。
+当前代码已通过 12 项 GitHub API mock 集成测试、27 项前端发布恢复测试、Wrangler dry-run 打包、本地真实 workerd + SQLite Durable Object OAuth 回归，以及 10 项独立浏览器上传 / 文件管理 / popup bridge 检查。主站完整测试为 115 项通过；隔离主站浏览器检查 13 组通过。Worker 已配置并真实部署到 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，version `85b28fd8-fbc6-4b68-9167-96ddb3966dec`，10 项线上匿名门禁检查通过。真实 Owner OAuth、网页单批提交、精确 SHA 上线和删除清理闭环已验证，详见 `../docs/VERIFICATION.md`。界面配置使用标准 Windows 辅助功能操作专用窗口，不读取浏览器 cookie / 凭据数据库。
 
 ## 一次性配置
 
@@ -70,4 +70,4 @@ npm.cmd run test:runtime
 npm.cmd run test:browser
 ```
 
-dry-run 不部署线上资源。runtime test 使用虚构配置运行本机 workerd 与 SQLite，验证路由、bridge、匿名 session、Origin 和导航校验；完整 OAuth 回调和发布失败/并发恢复在 GitHub mock suite 中验证。浏览器检查使用每次新建的独立 profile、随机调试端口、本地 fixture 和虚构 API，覆盖目录结构、拒收原因、元数据确认、移动时更新引用，以及 popup RPC 的 CSRF 和来源校验，不接触用户的登录 profile，也不发布到 GitHub。前端发布恢复测试验证草稿存储失败会阻止请求、已确认保存后的刷新失败不会改判为发布失败，以及响应丢失后复用完整请求并确认已有 commit。尚未完成真实账号测试前，不应称线上 Owner Mode 已启用。
+dry-run 不部署线上资源。runtime test 使用虚构配置与被拦截的 GitHub API，在本机 workerd 和 SQLite 中验证匿名保护、完整 OAuth 回调、加密会话与两类默认 fetch 的正确调用；测试专用导航适配不进入生产代码。发布失败和并发恢复另由 GitHub mock suite 验证。浏览器夹具使用全新独立 profile 和本地虚构 API，不接触用户登录 profile、不发布到 GitHub。前端恢复测试验证草稿存储失败会阻止请求、保存后刷新失败不会改判为保存失败、响应丢失后复用完整请求并确认已有 commit。真实生产验证独立记录在 `../docs/VERIFICATION.md`。

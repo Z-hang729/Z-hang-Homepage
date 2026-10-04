@@ -10,7 +10,7 @@
 - Repository ID 为 `1404136587`，已通过本人账号访问的官方 API 核实；较早的匿名 404 对应仓库当时的私有状态。
 - 使用官方 Git Credential Manager 完成账号连接；桌面界面操作使用 Windows 辅助功能，不读取用户浏览器 cookie 或凭据数据库。
 - Sites 的原地址已用新站完整替换，保持原有仅所有者可访问的设置；新站不使用旧 D1 / R2 内容。预览地址为 [`https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/`](https://zhang-academic-notebook.hang-zhai-729.chatgpt.site/)。
-- GitHub App 已创建，ID `5184269`、slug `z-hang-homepage-owner-cms`，并已仅安装到本站仓库，Installation ID 为 `167835885`。短期用户令牌到期已开启、webhook 已关闭；两个秘密已通过官方 Wrangler 写入后台 Secrets，未进入源码或文件。后台地址为 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，version `6289870c-a3dd-4179-8cc9-9e73c38f7016`，已真实部署并通过 10 项匿名生产检查。公开构建 URL 配置已回读确认；生产 OAuth 与实际 Owner 发布闭环仍需独立验证。
+- GitHub App 已创建，ID `5184269`、slug `z-hang-homepage-owner-cms`，并已仅安装到本站仓库，Installation ID 为 `167835885`。短期用户令牌到期已开启、webhook 已关闭；两个秘密已通过官方 Wrangler 写入后台 Secrets，未进入源码或文件。后台地址为 `https://z-hang-owner-cms.zhang-owner-worker.workers.dev`，当前 version `85b28fd8-fbc6-4b68-9167-96ddb3966dec`。真实 GitHub Owner 登录、网页整批发布、精确 SHA 部署、网页删除与清理部署均已验证，10 项匿名门禁检查通过。公开构建 URL 配置已回读确认。
 
 ## 架构
 
@@ -142,7 +142,7 @@ CMS 或认证服务不可用时，仍可直接在 GitHub 编辑 Markdown / YAML 
 4. commit 成功而未上线：查看该 SHA 的 Actions / Pages deployment，确认构建日志、base path 和公开附件链接。
 5. 编辑器出错：保留草稿备份，使用开发者工作流修复内容；公开站构建不应依赖 CMS 服务。
 
-## 本阶段验证边界
+## 本阶段验证记录
 
 截至 2026-10-04 的模块检查与浏览器验证：
 
@@ -152,6 +152,7 @@ CMS 或认证服务不可用时，仍可直接在 GitHub 编辑 Markdown / YAML 
 - SSR 全部 Astro 文件经实际 Rust compiler transform，没有 syntax error。最终全站类型与构建检查以 `VERIFICATION.md` 的实际执行记录为准。
 - 独立浏览器与隔离网站副本的 Owner 流程通过：草稿刷新 / Undo / Discard、三类条目、主页排序、批量本地保存与成功记录恢复、真实文件选择 / 管理 / 改名 / MIME 拒收、课程子笔记 CRUD，以及手机编辑窗口。正式 Profile / Homepage 内容摘要前后一致。
 - Backend 的独立浏览器夹具 9 项通过，涵盖目录层次、附件确认和链接迁移、顶层 popup bridge RPC、CSRF 隔离与错误窗口来源拒绝。此夹具没有进行外部发布。
-- 真实 GitHub owner 登录、远程 commit、Actions、Pages 与生产 visitor / owner 浏览器流程尚未验证。
+- 真实 GitHub owner 登录与两次网页发布已验证：临时项目和附件一起产生 commit `c08e7dd0696bdb5369ca107a2eeefa717cb28f8a`，Actions `37227824551`、Pages deployment `6845526022` 均成功，公开页面及原字节附件 HTTP 200；网页删除产生 commit `0c83768ad06b6db023e31adc37a2e5f47e49b306`，Actions `37228251115`、deployment `6845602309` 均成功，测试页面和附件均 HTTP 404。每次只改两个测试文件，正式 Profile / Homepage 未改动，已有 README 更新保留。
+- 最终完整测试 115 项通过，GitHub 后端集成测试 12 项；workerd 回归包含真实运行时 OAuth token exchange 和加密会话 bootstrap，外部 API 使用虚构夹具。修复了默认 fetch 丢失调用上下文的问题，并按 GitHub 实际 schema 使用 `branchName`。
 
-最终全站与浏览器执行结果分别记录在 `VERIFICATION.md` 中。本说明不替代生产 owner / visitor 两种身份的端到端验证。
+完整记录见 `VERIFICATION.md`。GitHub Pages 是网页编辑后的自动发布目标；Sites 保留独立的所有者预览副本，由 Sites 工作流同步，GitHub 内容提交不会自动更新该副本。

@@ -98,7 +98,7 @@ function isEditableText(path) {
 }
 
 export class OwnerService {
-  constructor(storage, config, fetcher = fetch, now = () => Date.now()) {
+  constructor(storage, config, fetcher = (...args) => fetch(...args), now = () => Date.now()) {
     this.storage = storage;
     this.config = config;
     this.fetcher = fetcher;

@@ -96,3 +96,17 @@ Cloudflare Worker `https://z-hang-owner-cms.zhang-owner-worker.workers.dev` 已�
 真实匿名 HTTP 检查 10/10 通过：配置健康、可信 Pages bridge、匿名安全会话、不可信 origin、直接会话访问、跨域写入、匿名同源写入、非导航登录、无效回调，以及导航 OAuth 的正确 Client ID / callback / PKCE S256 / Secure + HttpOnly + SameSite=Lax Cookie。仅校验响应，不记录 Cookie、OAuth state、token 或完整响应体，也未写入网站内容。
 
 证据在根目录忽略文件 `.local/backend-production-smoke.json`。这些结果验证真实服务可用及匿名拒绝；不能代替 Owner 登录与实际远程发布。
+
+## 真实 Owner 登录、发布与清理（2026-10-04）
+
+使用已登录 GitHub 的正常浏览器专用窗口，经本站 Owner 页和后台连接 popup 完成真实 OAuth；后台按数字 ID `326471613` 验证本人身份并只接受 installation `167835885` 的单一目标仓库。未读取浏览器 cookie / 凭据数据库，也未把令牌、验证码或 OAuth URL 参数写入验证记录。
+
+生产验证发现并修复两个问题：Cloudflare 全局 fetch 被作为实例方法调用会出现非法上下文，现在使用闭包调用；GitHub 当前 `CommittableBranch` 输入字段为 `branchName`，已通过只读 schema 查询核实并修正。拒绝诊断仅返回固定分类与已知 schema 字段，禁止回传 GitHub 原始错误或用户正文。最终 Worker version 为 `85b28fd8-fbc6-4b68-9167-96ddb3966dec`，匿名门禁重新检查 10/10 通过。
+
+- 在真实网页中创建标记为 demo 的 `Website publishing check` 项目，选择唯一的无敏感信息小附件，先存草稿再审阅整批发布。经过修复与原请求安全重试，仅产生一个 CMS commit：`c08e7dd0696bdb5369ca107a2eeefa717cb28f8a`。它以已有 README 更新 `ea2d90572b8713ccd22cd2c5cc2958afbaaca984` 为父提交，仅新增项目 Markdown 和附件两个文件。
+- [Actions 37227824551](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37227824551) completed / success；精确相同 SHA 的 Pages deployment `6845526022` success。公开项目页与附件均 HTTP 200，附件与本地选择文件原字节相同。
+- 通过相同编辑器输入精确标题确认删除，再审阅并发布。清理 commit `0c83768ad06b6db023e31adc37a2e5f47e49b306` 仅删除上述两文件；[Actions 37228251115](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37228251115) 和 deployment `6845602309` 同 SHA success。公开测试页面和附件均 HTTP 404；正式资料未变，README 更新保留。Git 历史保留已发布的验证示例。
+- 发布界面执行 Check again 验证部署反馈，清理后草稿清空，并退出 Owner 会话。新独立匿名 Chrome 对生产页面的 11 组检查通过，覆盖电脑和手机、搜索、主题、KaTeX、Mermaid、PDF、访客无编辑控件及只读 admin；没有浏览器或 HTTP 错误，已查看实际电脑和手机截图。
+- 最终完整测试为 115 项通过、0 失败、0 跳过，其中 GitHub 后端 12 项。编译后的真实 workerd + SQLite OAuth 回归通过，使用虚构外部 API 响应，不代替上述真实账号验证。
+
+无凭据的实测证据：仓库根目录忽略文件 `.local/owner-production-proof.json`，以及 `hub/.local/qa/public-live/results.json` 和截图。GitHub Pages 是编辑器自动发布目标；Sites 是通过 Sites 工作流同步的独立预览，GitHub commit 不会自动同步到 Sites。

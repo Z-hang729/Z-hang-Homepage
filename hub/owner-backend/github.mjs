@@ -10,7 +10,7 @@ export class OwnerError extends Error {
 }
 
 export class GitHub {
-  constructor(config, token, fetcher = fetch) {
+  constructor(config, token, fetcher = (...args) => fetch(...args)) {
     this.config = config;
     this.token = token;
     this.fetcher = fetcher;
@@ -90,7 +90,7 @@ export class GitHub {
     const result = await this.request('/graphql', { method: 'POST', body: JSON.stringify({
       query: 'mutation OwnerPublish($input:CreateCommitOnBranchInput!){createCommitOnBranch(input:$input){commit{oid url} clientMutationId}}',
       variables: { input: {
-        branch: { repositoryNameWithOwner: `${this.config.owner}/${this.config.repo}`, refName: this.config.branch },
+        branch: { repositoryNameWithOwner: `${this.config.owner}/${this.config.repo}`, branchName: this.config.branch },
         expectedHeadOid: expectedHead, fileChanges: { additions, deletions },
         message: { headline: message, body: `Owner-CMS-Publication: ${publicationId}` }, clientMutationId: publicationId,
       } },
@@ -100,7 +100,23 @@ export class GitHub {
       if ((result.errors ?? []).some(error => /expected|head|outdated|changed/i.test(error.message ?? ''))) {
         throw new OwnerError('HEAD_CONFLICT', '仓库已更新，请先刷新并合并草稿；没有覆盖远程内容。', 409);
       }
-      throw new OwnerError('COMMIT_REJECTED', 'GitHub 未创建 commit；请检查分支保护、文件限制或 App 权限。', 422);
+      // Provider errors can include user content. Return only fixed categories,
+      // never raw GraphQL errors, request bodies, headers, or access tokens.
+      const categories = (result.errors ?? []).map(error => {
+        const message = error.message ?? '';
+        if (/permission|not accessible|not permitted|not authorized|not allowed|forbidden|push access/i.test(message)) return 'PERMISSION';
+        if (/email|verified|committer|author identity/i.test(message)) return 'IDENTITY';
+        if (/not found|could not resolve|could not find|does not exist/i.test(message)) return 'NOT_FOUND';
+        if (/base64|fileChanges|additions|deletions|file contents/i.test(message)) return 'FILE_INPUT';
+        if (/argument|field|invalid|variable|input/i.test(message)) return 'SCHEMA';
+        if (/rate limit|abuse|spam/i.test(message)) return 'RATE_LIMIT';
+        return 'OTHER';
+      });
+      const schemaFields = ['clientMutationId','CreateCommitOnBranchInput','CreateCommitOnBranchPayload','CommittableBranch','FileChanges','FileAddition','repositoryNameWithOwner','branchName','refName','expectedHeadOid','fileChanges','contents','additions','deletions'].filter(field =>
+        (result.errors ?? []).some(error => (error.message ?? '').includes(field)));
+      const reason = ([...new Set(categories)].join(',') || 'EMPTY_RESULT') + (categories.includes('SCHEMA') && schemaFields.length ? ':' + schemaFields.join(',') : '');
+      throw new OwnerError('COMMIT_REJECTED', `GitHub 未创建 commit（${reason}）；请检查分支保护、文件限制或 App 权限。`, 422,
+        { providerCategories: [...new Set(categories)], ...(schemaFields.length ? {schemaFields} : {}) });
     }
     return { sha: commit.oid, url: commit.url };
   }
