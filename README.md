@@ -1,4 +1,6 @@
-# Z-hang Homepage
+# Z-hang-Homepage
+
+Z-hang's personal homepage.
 
 新学术网站源文件位于 [hub/](hub/README.md)，包括 Astro 静态页面、内容与附件、Owner 编辑界面，以及独立的 GitHub 认证后端。
 
