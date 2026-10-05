@@ -1,0 +1,21 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {getFiles} from '../../lib/file-records';
+import {formatFileSize,stableFilePath,originalDownloadURL} from '../../lib/files.mjs';
+import {url} from '../../lib/site';
+export function getStaticPaths(){return getFiles().map(file=>({params:{id:file.id},props:{file}}));}
+interface Props{file:any;}
+const {file}=Astro.props;
+const related=[['research',file.researchId],['notes',file.noteId],['projects',file.projectId]].filter(pair=>pair[1]);
+---
+<BaseLayout title={file.displayName} description={file.description||`Preview and download ${file.originalName}.`}>
+ <div class="container section file-detail" data-file-detail data-file-preview={JSON.stringify(file)} data-pagefind-ignore={file.visibility==='unlisted'?'':undefined}>
+  <nav class="breadcrumb" aria-label="Breadcrumb"><a href={url('/')}>Home</a><span>/</span><a href={url('/files/')}>Files</a><span>/</span><span>{file.displayName}</span></nav>
+  <p class="eyebrow">ORIGINAL FILE</p><h1>{file.displayName}</h1>{file.description&&<p class="section-description">{file.description}</p>}
+  <div class="file-detail-actions" data-pagefind-ignore><a class="button-secondary" href={url(originalDownloadURL(file))} download={file.originalName}>Download original ↓</a><button type="button" class="button-secondary" data-file-copy={url(stableFilePath(file.id))}>Copy link</button><button type="button" class="button-secondary" data-preview-load>Open preview</button><button type="button" class="button-secondary" data-preview-fullscreen hidden>Full screen</button></div>
+  <p data-file-status role="status" aria-live="polite" data-pagefind-ignore></p><div class="file-preview prose" data-preview-host data-pagefind-ignore></div>
+  <dl class="file-metadata"><dt>Original filename</dt><dd>{file.originalName}</dd><dt>Folder path</dt><dd>{file.relativePath}</dd><dt>Size</dt><dd>{formatFileSize(file.size)}</dd><dt>Type</dt><dd>{file.extension.toUpperCase()||file.mimeType}</dd><dt>Uploaded</dt><dd>{file.uploadedAt.slice(0,10)}</dd><dt>Updated</dt><dd>{file.updatedAt.slice(0,10)}</dd>{file.sha256&&<><dt>SHA256</dt><dd><code>{file.sha256}</code></dd></>}{related.length>0&&<><dt>Related content</dt><dd>{related.map(([kind,slug])=><a href={url(`/${kind}/${slug}/`)}>{kind} / {slug} ↗ </a>)}</dd></>}{file.tags.length>0&&<><dt>Tags</dt><dd>{file.tags.join(' · ')}</dd></>}</dl>
+ </div>
+</BaseLayout>
+<script>import '../../file-preview/preview.js';import '../../file-preview/library.js';</script>
+<style>.file-detail h1{overflow-wrap:anywhere}.file-detail-actions{display:flex;flex-wrap:wrap;gap:.65rem;margin:1.5rem 0}.file-detail-actions button{font:inherit;cursor:pointer}.file-preview{max-width:100%;overflow:auto;background:var(--surface);border-radius:12px}.file-preview:empty{display:none}.file-preview:fullscreen{background:var(--surface);padding:1rem;width:100%;height:100%;overflow:auto}.file-preview :global(iframe){width:100%;height:min(80vh,950px);border:1px solid var(--line)}.file-preview :global(img){max-width:100%;height:auto}.file-preview :global(audio),.file-preview :global(video){width:100%;max-height:75vh}.file-preview :global(pre){white-space:pre-wrap;overflow-wrap:anywhere}.file-preview :global(.file-image-tools){display:flex;gap:1rem;align-items:center;padding:.7rem}.file-preview :global(.file-image-canvas){overflow:auto;max-height:75vh}.file-preview :global(.file-image-canvas img){transform-origin:top left;max-width:100%}.file-metadata{display:grid;grid-template-columns:150px minmax(0,1fr);gap:.6rem 1.2rem;margin:2rem 0;border-top:1px solid var(--line);padding-top:1.5rem}.file-metadata dt{color:var(--muted)}.file-metadata dd{margin:0;overflow-wrap:anywhere}.file-metadata code{font-size:.75rem}@media(max-width:500px){.file-metadata{grid-template-columns:100px minmax(0,1fr)}.file-detail-actions{font-size:.82rem}}</style>

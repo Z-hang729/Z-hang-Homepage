@@ -5,7 +5,7 @@ import { OwnerService, configuration, errorResponse } from './service.mjs';
 export class OwnerRepository {
   constructor(ctx, env) {
     this.ctx = ctx;
-    this.service = new OwnerService(ctx.storage, configuration(env));
+    this.service = new OwnerService(ctx.storage, configuration(env), (...args) => fetch(...args), () => Date.now(), env);
   }
   async fetch(request) {
     if (!await this.ctx.storage.getAlarm()) await this.ctx.storage.setAlarm(Date.now() + 3600000);

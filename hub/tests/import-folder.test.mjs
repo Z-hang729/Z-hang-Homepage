@@ -39,7 +39,7 @@ test('folder import preserves originals and hierarchy, renders child Markdown, c
   const main = await fs.readFile(path.join(result.contentPath, 'index.md'), 'utf8'); assert.match(main, /description: Notes about the solar wind\./); assert.match(main, /\/notes\/space-plasma-physics\/files\/Lectures\/Lecture01\//);
   const lecture = await fs.readFile(path.join(result.contentPath, 'files/Lectures/Lecture01.md'), 'utf8'); assert.match(lecture, /\/uploads\/notes\/space-plasma-physics\/Figures\/plot%201\.png/); assert.match(lecture, /\/uploads\/notes\/space-plasma-physics\/References\/paper\.pdf/);
   assert.ok(lecture.includes('[plot]: </uploads/notes/space-plasma-physics/Figures/plot%201.png> "Reference title"'));
-  const manifest = parse(await fs.readFile(path.join(result.contentPath, 'metadata.yaml'), 'utf8')); assert.equal(manifest.omitted.length, 6); assert.match(manifest.omitted.find((file) => file.path === 'large.pdf').reason, /10 MiB/); assert.equal(manifest.files.find((file) => file.path === 'References/paper.pdf').type, 'pdf');
+  const manifest = parse(await fs.readFile(path.join(result.contentPath, 'metadata.yaml'), 'utf8')); assert.equal(manifest.omitted.length, 6); assert.match(manifest.omitted.find((file) => file.path === 'large.pdf').reason, /repository capacity/); assert.equal(manifest.files.find((file) => file.path === 'References/paper.pdf').type, 'pdf');
   await assert.rejects(fs.stat(path.join(site, 'public/uploads/notes/space-plasma-physics/.env')), { code: 'ENOENT' });
 });
 

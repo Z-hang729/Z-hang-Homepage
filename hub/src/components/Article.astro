@@ -3,6 +3,8 @@ import { getCollection, render } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PDFViewer from './PDFViewer.astro';
 import Citation from './Citation.astro';
+import FileResources from './FileResources.astro';
+import { getFiles } from '../lib/file-records';
 import { url, siteConfig } from '../lib/site';
 import { allEntries, dateLabel, entryPath, escapeXML, readingMinutes, sortLatest, tagSlug } from '../lib/content';
 import type { Heading, HubEntry } from '../lib/content';
@@ -24,10 +26,12 @@ const logs = entry.collection === 'research' ? sortLatest((await getCollection('
 const renderedLogs = await Promise.all(logs.map(async (log) => ({ log, ...(await render(log)) })));
 const pdfs = data.attachments.filter((file) => file.type?.toLowerCase() === 'pdf' || /\.pdf(?:[?#]|$)/i.test(file.url));
 const otherFiles = data.attachments.filter((file) => !pdfs.includes(file));
+const storedFiles = getFiles({kind:entry.collection,slug:entry.id});
 const toc = [...headings.filter((heading) => heading.depth === 2 || heading.depth === 3),
   ...(data.documents.length ? [{ depth: 2, slug: 'files', text: 'Course files' }] : []),
   ...(logs.length ? [{ depth: 2, slug: 'research-log', text: 'Research log' }] : []),
   ...(data.attachments.length ? [{ depth: 2, slug: 'attachments', text: 'Attachments' }] : []),
+  ...(storedFiles.length ? [{ depth: 2, slug: 'file-resources', text: 'Files' }] : []),
   ...(data.references.length ? [{ depth: 2, slug: 'references', text: 'References' }] : []),
   ...(related.length ? [{ depth: 2, slug: 'related-content', text: 'Related content' }] : []),
 ];
@@ -69,6 +73,7 @@ function treeHTML(tree: Tree): string {
         {data.documents.length > 0 && <section class="article-section" id="files"><h2>Course files</h2><p class="section-description">Browse the original folder structure. Markdown opens in the reader; the original files are available under Attachments.</p><nav class="file-tree" aria-label="Imported document files" set:html={treeHTML(fileTree)} /></section>}
         {renderedLogs.length > 0 && <section class="article-section" id="research-log"><h2>Research log</h2><ol class="research-log">{renderedLogs.map(({ log, Content: LogContent }) => <li id={`log-${log.data.date.toISOString().slice(0, 10)}`} data-owner-log-path={`hub/src/content/logs/${log.id}.md`}><time datetime={log.data.date.toISOString()}>{dateLabel(log.data.date)}</time><div><h3>{log.data.title} {log.data.demo && <span class="demo-label">Demo</span>}</h3><div class="prose log-body"><LogContent /></div>{log.data.attachments?.length > 0 && <ul class="resource-list">{log.data.attachments.map(file => <li><a href={url(file.url)}>{file.title} ↓</a>{file.type && <span>{file.type.toUpperCase()}</span>}</li>)}</ul>}</div></li>)}</ol></section>}
         {data.attachments.length > 0 && <section class="article-section" id="attachments"><h2>Attachments</h2>{pdfs.map((file) => <PDFViewer src={file.url} title={file.title} />)}{otherFiles.length > 0 && <ul class="resource-list">{otherFiles.map((file) => <li><a href={url(file.url)} download>{file.title} ↓</a>{file.type && <span>{file.type.toUpperCase()}</span>}</li>)}</ul>}</section>}
+        <FileResources files={storedFiles}/>
         {data.references.length > 0 && <section class="article-section" id="references"><h2>References</h2><ol class="reference-list">{data.references.map((reference, index) => <li id={`reference-${index + 1}`}>{reference.authors.length > 0 && <span>{reference.authors.join(', ')}. </span>}{reference.year && <span>({reference.year}). </span>}<Citation title={reference.title} href={reference.url} />{reference.doi && <a href={`https://doi.org/${encodeURIComponent(reference.doi)}`}> DOI: {reference.doi}</a>}{reference.bibtex && <details><summary>BibTeX</summary><pre><code>{reference.bibtex}</code></pre></details>}</li>)}</ol></section>}
         {related.length > 0 && <section class="article-section" id="related-content"><h2>Related content</h2><div class="related-grid">{related.map((item) => <a class="related-card" href={url(entryPath(item))}><span class="eyebrow">{item.collection}</span><h3>{item.data.title}</h3><p>{item.data.description}</p></a>)}</div></section>}
         <footer class="article-footer" data-pagefind-ignore><p>Created {dateLabel(data.date)} · Last updated {dateLabel(data.updated)}{data.authors.length > 0 && <> · {data.authors.join(', ')}</>}</p>{sourceURL && <div class="article-source"><a href={sourceURL}>View source ↗</a><a href={editURL}>Edit on GitHub ↗</a></div>}<nav class="reading-neighbors" aria-label="Previous and next entries">{previous ? <a href={url(entryPath(previous))}><small>← Previous entry</small><strong>{previous.data.title}</strong></a> : <span />}{next && <a href={url(entryPath(next))}><small>Next entry →</small><strong>{next.data.title}</strong></a>}</nav></footer>

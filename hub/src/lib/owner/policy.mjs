@@ -2,9 +2,10 @@ import YAML from 'yaml';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
+import { STORAGE_LIMITS, validateFileMetadata } from '../files.mjs';
 
 // Shared with browser and Worker: intentionally free of Node APIs.
-export const OWNER_LIMITS = Object.freeze({ fileBytes: 10485760, textBytes: 1048576, batchBytes: 20971520, files: 250 });
+export const OWNER_LIMITS = Object.freeze({ fileBytes: STORAGE_LIMITS.repositoryBytes, textBytes: 1048576, batchBytes: STORAGE_LIMITS.metadataRequestBytes, files: Number.MAX_SAFE_INTEGER });
 export const CONTENT_KINDS = ['research', 'notes', 'projects'];
 export const HOMEPAGE_SECTION_IDS = ['hero', 'current-focus', 'about', 'research', 'research-updates', 'notes', 'timeline', 'projects', 'contact'];
 export const DEFAULT_HOMEPAGE = { sections: HOMEPAGE_SECTION_IDS.map((id, order) => ({ id, order, visible: true })) };
@@ -21,6 +22,7 @@ export function safeRelativePath(value) {
 export function assertSlug(value) { if (typeof value !== 'string' || value.length > 100 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) throw ownerError('Use lowercase letters, numbers and single hyphens for a URL slug.'); return value; }
 export function assertAllowedPath(input, { action = 'upsert' } = {}) {
   const value = safeRelativePath(input);
+  if (/^hub\/src\/data\/files\/[a-z0-9][a-z0-9-]{0,99}\.json$/.test(value)) return value;
   if (/^hub\/src\/data\/(profile|navigation|homepage)\.yaml$/.test(value)) { if (action === 'delete') throw ownerError('Essential data files cannot be deleted.', 'PATH_NOT_ALLOWED'); return value; }
   const content = value.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/(index\.mdx?|metadata\.yaml|files\/.+\.md)$/);
   if (content) { assertSlug(content[2]); return value; }
@@ -74,7 +76,7 @@ export function encodeBase64(bytes) { let value = ''; for (let i = 0; i < bytes.
 function starts(bytes, signature, offset = 0) { return signature.every((v, i) => bytes[offset + i] === v); }
 function ascii(bytes, offset, length) { return new TextDecoder().decode(bytes.subarray(offset, offset + length)); }
 export function validateAsset(path, bytes, mime = '') {
-  assertAllowedPath(path); if (!(bytes instanceof Uint8Array) || bytes.length > OWNER_LIMITS.fileBytes) throw ownerError('This file exceeds 10 MiB. Keep large materials in external research storage and publish a download link.', 'FILE_TOO_LARGE', 413);
+  assertAllowedPath(path); if (!(bytes instanceof Uint8Array) || bytes.length > OWNER_LIMITS.fileBytes) throw ownerError('This exceeds the GitHub repository file capacity. Use the direct upload queue to store it outside Git history.', 'FILE_TOO_LARGE', 413);
   const ext = path.split('.').pop().toLowerCase();
   const signatures = { png: () => starts(bytes, [137,80,78,71,13,10,26,10]), jpg: () => starts(bytes,[255,216,255]), jpeg: () => starts(bytes,[255,216,255]), gif: () => /^GIF8[79]a$/.test(ascii(bytes,0,6)), webp: () => ascii(bytes,0,4)==='RIFF' && ascii(bytes,8,4)==='WEBP', avif: () => ascii(bytes,4,4)==='ftyp' && /avif|avis/.test(ascii(bytes,8,24)), tif: () => starts(bytes,[73,73,42,0]) || starts(bytes,[77,77,0,42]), tiff: () => starts(bytes,[73,73,42,0]) || starts(bytes,[77,77,0,42]), bmp: () => ascii(bytes,0,2)==='BM', pdf: () => ascii(bytes,0,5)==='%PDF-', zip: () => starts(bytes,[80,75,3,4]) || starts(bytes,[80,75,5,6]) || starts(bytes,[80,75,7,8]), fits: () => ascii(bytes,0,9)==='SIMPLE  =' && bytes.length>=2880 && bytes.length%2880===0, fit: () => ascii(bytes,0,9)==='SIMPLE  =' && bytes.length>=2880 && bytes.length%2880===0, fts: () => ascii(bytes,0,9)==='SIMPLE  =' && bytes.length>=2880 && bytes.length%2880===0 };
   if (signatures[ext] && !signatures[ext]()) throw ownerError(`The bytes of ${path.split('/').pop()} do not match .${ext}.`, 'INVALID_ASSET');
@@ -86,18 +88,24 @@ function walk(node, callback) { callback(node); for(const child of node.children
 export function validateMarkdownBody(body) { walk(parser.parse(body), node => { if (node.type==='html') throw ownerError('Raw HTML and MDX components are disabled in editable Markdown. Use ordinary figures, links, quotations and equations.'); if(['link','image','definition'].includes(node.type)) assertSafeURL(node.url,{allowEmpty:false}); }); return body; }
 export function snapshotIndex(files=[]) { if(files instanceof Map) return files; if(!Array.isArray(files)) throw ownerError('Snapshot files must be a list or Map.'); return new Map(files.map(file=>[file.path,file])); }
 export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,maxBatchBytes=OWNER_LIMITS.batchBytes}={}) {
-  if(!Array.isArray(input) || !input.length || input.length>OWNER_LIMITS.files) throw ownerError('Publish needs 1–250 changed files.'); const snapshot=snapshotIndex(snapshotFiles),names=new Set(); let bytes=0;
+  if(!Array.isArray(input) || !input.length) throw ownerError('Publish needs at least one changed file.'); const snapshot=snapshotIndex(snapshotFiles),names=new Set(); let bytes=0;
   const changes=input.map(change=>{
     if(!change || !['upsert','delete'].includes(change.action)) throw ownerError('A change needs upsert/delete action.'); const path=assertAllowedPath(change.path,{action:change.action}), canonical=path.normalize('NFKC').toLowerCase(); if(names.has(canonical)) throw ownerError('Duplicate or case-colliding paths.'); names.add(canonical); const existing=snapshot.get(path),collision=[...snapshot.keys()].find(p=>p!==path && p.normalize('NFKC').toLowerCase()===canonical); if(collision) throw ownerError(`Path collides with ${collision}.`,'PATH_NOT_ALLOWED');
     if(!Object.hasOwn(change,'expectedSha') || change.expectedSha!==(existing?.sha??null)) throw ownerError(`${path} changed since editing began. Reload and review your draft; nothing was overwritten.`,'REVISION_CONFLICT',409);
     if(change.action==='delete') { if(!existing) throw ownerError(`Cannot delete missing file ${path}.`); return {path,action:'delete',expectedSha:change.expectedSha}; }
     if(!['utf8','base64'].includes(change.encoding) || typeof change.content!=='string') throw ownerError('Content needs explicit utf8/base64 encoding.'); const decoded=change.encoding==='base64'?decodeBase64(change.content):utf8Bytes(change.content); bytes+=decoded.length;
-    if(path.startsWith('hub/public/')) validateAsset(path,decoded,change.mime || '');
+    if(/^hub\/src\/data\/files\/.+\.json$/.test(path)) {
+      if(change.encoding!=='utf8'||decoded.length>OWNER_LIMITS.textBytes)throw ownerError('File metadata must be a small UTF-8 JSON document.','INVALID_FILE_METADATA');
+      let file;try{file=validateFileMetadata(JSON.parse(change.content));}catch(error){throw ownerError(error.message,'INVALID_FILE_METADATA');}
+      if(path!==`hub/src/data/files/${file.id}.json`)throw ownerError('Metadata path must match the stable file id.','INVALID_FILE_METADATA');
+    }
+    else if(path.startsWith('hub/public/')) validateAsset(path,decoded,change.mime || '');
     else { if(change.encoding!=='utf8' || decoded.length>OWNER_LIMITS.textBytes || change.content.includes('\u0000')) throw ownerError('Editable content must be UTF-8 up to 1 MiB.','FILE_TOO_LARGE',413); if(path.endsWith('.yaml')) { const data=parseYAML(change.content); if(path.startsWith('hub/src/data/')) validateData(path,data); else {if(!data || typeof data!=='object' || Array.isArray(data)) throw ownerError('Manifest must be an object.'); links(data);} } else { const {metadata,body}=parseFrontmatter(change.content),kind=path.split('/')[3]; validateMetadata(metadata,{kind,document:path.includes('/files/'),log:kind==='logs'}); if(path.endsWith('.mdx')) {if(!allowTrustedMdx || !existing?.content || body!==parseFrontmatter(existing.content).body) throw ownerError('Executable MDX body edits require conversion to safe Markdown; the original is preserved.','MDX_REQUIRES_CONVERSION');} else validateMarkdownBody(body); } }
     return {path,action:'upsert',content:change.content,encoding:change.encoding,expectedSha:change.expectedSha};
   });
-  if(bytes>maxBatchBytes) throw ownerError(`Publish exceeds ${maxBatchBytes/1048576} MiB. Use smaller batches or external dataset storage.`,'BATCH_TOO_LARGE',413);
+  if(bytes>maxBatchBytes) throw ownerError(`The metadata publication exceeds the backend request capacity (${maxBatchBytes/1048576} MiB). Original file bytes belong in the direct upload queue.`,'BATCH_TOO_LARGE',413);
   const resulting=new Set(snapshot.keys()); for(const c of changes) c.action==='delete'?resulting.delete(c.path):resulting.add(c.path); const indexes=new Set(); for(const p of resulting) if(/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/index\.mdx?$/.test(p)) { const id=p.replace(/\.mdx?$/,''); if(indexes.has(id)) throw ownerError('A URL cannot have both index.md and index.mdx.','DUPLICATE_SLUG'); indexes.add(id); }
   for(const c of changes) if(c.action==='upsert' && c.path.startsWith('hub/src/content/logs/')) {const {metadata}=parseFrontmatter(c.content); if(!resulting.has(`hub/src/content/research/${metadata.project}/index.md`) && !resulting.has(`hub/src/content/research/${metadata.project}/index.mdx`)) throw ownerError('Research update must belong to an existing project.');}
+  for(const c of changes)if(c.action==='upsert'&&c.path.startsWith('hub/src/data/files/')){const file=JSON.parse(c.content);for(const [kind,key]of [['research','researchId'],['notes','noteId'],['projects','projectId']])if(file[key]&&!resulting.has(`hub/src/content/${kind}/${file[key]}/index.md`)&&!resulting.has(`hub/src/content/${kind}/${file[key]}/index.mdx`))throw ownerError('File association must refer to an existing content page.','INVALID_FILE_ASSOCIATION');}
   return {changes,bytes,paths:changes.map(c=>c.path)};
 }

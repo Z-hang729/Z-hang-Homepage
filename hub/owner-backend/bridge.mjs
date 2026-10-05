@@ -4,9 +4,9 @@
 const bridgeScript = String.raw`
 const clientOrigin = new URL(location.href).searchParams.get('client_origin');
 const client = window.opener;
-const allowedMethods = new Set(['session','snapshot','file','publish','history','status','logout']);
+const allowedMethods = new Set(['session','snapshot','file','publish','history','status','logout','storage-config','storage-start','storage-part','storage-complete','storage-abort','storage-resume','storage-delete','storage-sync','storage-import']);
 let csrf = null;
-let active = false;
+let active = 0;
 let loginPoll = null;
 const authEvents = typeof BroadcastChannel === 'function' ? new BroadcastChannel('zhang-owner-auth') : null;
 const status = document.querySelector('[data-status]');
@@ -41,8 +41,8 @@ window.addEventListener('message',async event=>{
   const {type,id,method,params} = event.data;
   if (type === 'hello') { send({type:'ready',version:1}); return; }
   if (type !== 'request' || typeof id !== 'string' || id.length > 100 || !allowedMethods.has(method)) return;
-  if (active) { send({type:'response',id,ok:false,error:{code:'BRIDGE_BUSY',message:'请等待当前操作完成。',status:409}}); return; }
-  active = true;
+  if (active >= 12) { send({type:'response',id,ok:false,error:{code:'BRIDGE_BUSY',message:'请等待当前操作完成。',status:409}}); return; }
+  active++;
   try {
     if (method === 'session') {
       const result = await bootstrap();
@@ -50,14 +50,15 @@ window.addEventListener('message',async event=>{
       send({type:'response',id,ok:true,result:safeResult});
     } else {
       if (!csrf) throw Object.assign(new Error('请先登录 GitHub。'),{code:'AUTH_REQUIRED',status:401});
-      const response = await fetch('/api/rpc',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({method,params:params||{}})});
+      const safeParams = method === 'storage-start' ? {...(params||{}),clientOrigin} : params||{};
+      const response = await fetch('/api/rpc',{method:'POST',credentials:'same-origin',headers:{'Content-Type':'application/json','X-CSRF-Token':csrf},body:JSON.stringify({method,params:safeParams})});
       const result = await response.json();
       send({type:'response',id,ok:response.ok,...(response.ok ? {result} : {error:result.error})});
       if (method === 'logout' || response.status === 401) { csrf=null; await bootstrap(); }
     }
   } catch(error) {
     send({type:'response',id,ok:false,error:{code:error.code||'BRIDGE_ERROR',message:error.message||'后端连接失败。',status:error.status||502}});
-  } finally { active=false; }
+  } finally { active--; }
 });
 bootstrap().then(()=>send({type:'ready',version:1})).catch(error=>{status.textContent=error.message;send({type:'error',error:{code:'BRIDGE_ERROR',message:error.message,status:502}})});
 `;

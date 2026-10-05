@@ -72,7 +72,7 @@ Owner workspace 展示三类条目数量、上传资产合计与 GitHub 报告�
 
 浏览器导入资料时保留来源层次与原始附件，生成不执行 MDX / HTML 的 Markdown 阅读副本并重写相对链接。README、封面与论文识别仅提出建议；选择用于正文、封面或资源链接需要 owner 确认。
 
-Owner 单次上传/发布限制为：单附件 10 MiB、单可编辑文本 1 MiB、整批 20 MiB、最多 250 个变更文件。小型 FITS 与 ZIP 可作为附件下载，验证文件签名；不解压 ZIP、不执行代码。大型数据使用外部链接。Phase 1 CLI 文件夹导入有独立的 100 MiB / 1000 文件限制，不能与网页发布上限混用。
+Owner 文件队列不再设置 10 MiB / 20 MiB / 250 文件或目录 1000 文件限制；原件保存到 GitHub Releases 或配置好的 R2，网站只发布元数据。当前 Releases 安全流式中转受 Cloudflare 100 MB 请求容量约束，更大文件走 R2 浏览器直传。可编辑文本 1 MiB 和发布请求 32 MiB 是独立的文本/API 防护，不是附件批次上限。CLI 导入仍使用 GitHub 仓库存储，按单文件真实平台容量检查，没有目录数量或累计字节限制。完整操作和容量说明见 [FILE-STORAGE.md](FILE-STORAGE.md)。
 
 首页默认 section ID 顺序：`hero`、`current-focus`、`about`、`research`、`research-updates`、`notes`、`timeline`、`projects`、`contact`。每项保存 `order`、`visible`，可选 `title`。相邻 hero / current-focus 与 research-updates / notes 保持原视觉组合；重排或隐藏后按配置重新构建。
 

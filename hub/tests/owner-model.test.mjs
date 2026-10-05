@@ -57,10 +57,10 @@ test('new folder import refuses existing parent URLs, unsafe files and invalid c
   assert.throws(()=>importFolderChanges(source,{...options,kind:'notes',slug:'new-course',metadata:{...data,semester:'2026 Fall',category:'Invalid category'}}),/category/);
   assert.deepEqual(source,baseline);
 });
-test('folder import limits include generated reading pages and parent metadata before any draft is accepted',()=>{
+test('folder import supports batches beyond the former 250 changed-file cap',()=>{
   const source=snapshot(),options={kind:'research',slug:'too-many-readings',metadata:data};
   const files=Array.from({length:125},(_,index)=>({path:`Lecture${index}.md`,encoding:'utf8',content:'# Lecture\n\nOriginal material.'}));
-  assert.throws(()=>importFolderChanges(source,{...options,files}),error=>error.code==='INVALID_CHANGE'&&/250/.test(error.message));
+  assert.ok(importFolderChanges(source,{...options,files}).length>250);
   assert.equal(source.files.length,3);
 });
 test('general uploads and asset moves keep sources and update approved references',()=>{const source=snapshot();const upload=uploadAssetChanges(source,{kind:'general',target:'documents',files:[{path:'handout.txt',encoding:'utf8',content:'Original'}]});validateChangeSet(upload,{snapshotFiles:source.files});const draft=applyDraftToSnapshot(source,upload);draft.files.find(f=>f.path==='hub/public/uploads/documents/handout.txt').sha='asset';const moved=moveAssetChanges(draft,{from:'hub/public/uploads/documents/handout.txt',to:'hub/public/uploads/files/renamed.txt',confirmation:'handout.txt'});assert.equal(moved.length,2);assert.equal(moved[0].content,'Original');assert.throws(()=>deleteAssetChanges(draft,{path:'hub/public/uploads/documents/handout.txt',confirmation:'wrong'}),/Confirm/);});

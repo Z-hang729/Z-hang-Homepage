@@ -22,7 +22,7 @@ test('image selection validates signature and MIME while preserving scientific o
   await assert.rejects(prepareImage(imageFile('plot.png','text/html')),/MIME/);
 });
 test('oversized or unsafe image selection is rejected before loading the file into memory',async()=>{
-  let read=false;await assert.rejects(prepareImage({name:'huge.png',size:OWNER_LIMITS.fileBytes+1,type:'image/png',arrayBuffer:async()=>{read=true;return PNG.buffer;}}),/10 MiB/);assert.equal(read,false);
+  let read=false;await assert.rejects(prepareImage({name:'huge.png',size:OWNER_LIMITS.fileBytes+1,type:'image/png',arrayBuffer:async()=>{read=true;return PNG.buffer;}}),/provider capacity/);assert.equal(read,false);
   await assert.rejects(prepareImage(imageFile('../image.png')),/protected/);
 });
 test('replace reuses only an existing upload with matching extension and exact baseline SHA',async()=>{

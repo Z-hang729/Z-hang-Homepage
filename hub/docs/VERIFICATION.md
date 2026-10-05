@@ -110,3 +110,17 @@ Cloudflare Worker `https://z-hang-owner-cms.zhang-owner-worker.workers.dev` 已�
 - 最终完整测试为 115 项通过、0 失败、0 跳过，其中 GitHub 后端 12 项。编译后的真实 workerd + SQLite OAuth 回归通过，使用虚构外部 API 响应，不代替上述真实账号验证。
 
 无凭据的实测证据：仓库根目录忽略文件 `.local/owner-production-proof.json`，以及 `hub/.local/qa/public-live/results.json` 和截图。GitHub Pages 是编辑器自动发布目标；Sites 是通过 Sites 工作流同步的独立预览，GitHub commit 不会自动同步到 Sites。
+
+## 文件存储升级：发布前验证（2026-10-05）
+
+本轮从远程用户最新提交 `74f40cc8a5970db0b6f0a9ad9abfdd5de41d9aee` 开始，备份分支为 `backup/before-file-system-v2`。忽略目录中的基线清单对 18 个首页、个人资料、已有内容及头像文件逐项核对 SHA256，结果全部一致；用户删除的旧页面没有恢复。
+
+- Node 自动测试 157/157 通过，包含真实存储容量路由、超过 1000 项队列、分块校验与恢复、并发失败隔离、元数据发布、共享原件删除保护、预览读取预算与旧编辑流程回归。
+- Astro 检查为 0 errors、0 warnings（10 个开发提示）；按实际 Pages 路径构建 34 页，779 项链接、资源与锚点检查通过。
+- 7 组隔离浏览器上传/管理验证通过：12 MiB 原件字节一致、目录和 ZIP、一次草稿批次、稳定 ID 替换、删除确认、导入/同步及手机队列无溢出。16 组独立阅读器浏览器验证通过，覆盖各类预览、按需读取、安全下载及关联页；测试使用虚构存储服务，不代表生产账号的上传结果。
+- 编译后的真实 workerd + SQLite DO 验证 12 MiB 流式上传、上游 Content-Length、作用域票据、幂等完成及未发布预览拒绝；外部 API 响应为虚构夹具。
+- 最新真实 Worker version `23910430-4bed-4ae0-983f-6b620e6ae925` 已上线，匿名生产安全门禁 10/10 通过。
+
+证据：`hub/.local/qa/storage-browser/results.json`、`hub/.local/qa/file-reader/results.json`、根目录 `.local/file-storage-v2-baseline.json` 和 `.local/backend-production-smoke.json`，均不进入公开仓库。
+
+本轮配置保持原单仓库 GitHub App 安装范围，默认使用网站仓库 Releases。Cloudflare R2 API 返回账户尚未开通，需要账户本人在控制台完成开通/账单确认；因此当前不能声称真实多 GB R2 上传已验证。GitHub Releases 的实际上传及清理闭环另行记录，不从隔离测试推断。

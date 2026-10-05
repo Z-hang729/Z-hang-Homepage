@@ -135,7 +135,12 @@ export function deleteEntryChanges(snapshot,{kind,slug,confirmation}) {
   const file=entryFile(snapshot,kind,slug); if(!file) throw ownerError('The article no longer exists.'); const entry=parseContentFile(file);
   if(confirmation!==entry.metadata.title) throw ownerError('Enter the exact article title to confirm deletion.','DELETE_CONFIRMATION');
   const roots=[`${prefix}${kind}/${slug}/`,`hub/public/uploads/${kind}/${slug}/`,...(kind==='research'?[`${prefix}logs/${slug}/`]:[])];
-  return [...filesOf(snapshot).keys()].filter(path=>roots.some(root=>path.startsWith(root))).map(path=>deleteFor(snapshot,path));
+  const changes=[...filesOf(snapshot).keys()].filter(path=>roots.some(root=>path.startsWith(root))).map(path=>deleteFor(snapshot,path));
+  // Removing a page detaches its independently stored files instead of losing
+  // originals or leaving metadata links that would break the next build.
+  const association={research:'researchId',notes:'noteId',projects:'projectId'};
+  for(const record of filesOf(snapshot).values())if(/^hub\/src\/data\/files\/.+\.json$/.test(record.path)&&record.content){const metadata=JSON.parse(record.content);if(metadata[association[kind]]!==slug)continue;metadata[association[kind]]=null;if(metadata.category===kind)metadata.category=CONTENT_KINDS.find(k=>metadata[association[k]])||'general';metadata.updatedAt=new Date().toISOString();changes.push(changeFor(snapshot,record.path,JSON.stringify(metadata,null,2)+'\n'));}
+  return changes;
 }
 export function createLogChanges(snapshot,{project,metadata={},body='',slug}) {
   assertSlug(project); if(!entryFile(snapshot,'research',project)) throw ownerError('Choose an existing research project.');
@@ -187,10 +192,10 @@ function rewriteUploadedLinks(body,current,available,kind,slug) {
   for(const [start,end,value] of replacements.sort((a,b)=>b[0]-a[0])) body=body.slice(0,start)+value+body.slice(end); return body;
 }
 export function analyzeUploadFiles(files) {
-  if(!Array.isArray(files) || !files.length || files.length>OWNER_LIMITS.files) throw ownerError('Choose 1–250 files.'); const seen=new Set(); let bytes=0;
+  if(!Array.isArray(files) || !files.length) throw ownerError('Choose at least one file.'); const seen=new Set(); let bytes=0;
   const recognized={readme:null,cover:null,paper:null,bibliography:null,figures:[],code:[],logs:[]};
   const items=files.map(file=>{const path=safeRelativePath(file.path),canonical=path.normalize('NFKC').toLowerCase(); if(seen.has(canonical)) throw ownerError('Duplicate or case-colliding upload paths.'); seen.add(canonical); const decoded=file.encoding==='base64'?decodeBase64(file.content):utf8Bytes(file.content); validateAsset(`hub/public/uploads/files/${path}`,decoded,file.mime||''); bytes+=decoded.length; const item={...file,path,size:decoded.length}; if(/(^|\/)readme\.mdx?$/i.test(path)) recognized.readme ||=path;if(/(^|\/)(cover|thumbnail|poster)\.(png|jpe?g|webp|gif)$/i.test(path)) recognized.cover ||=path;if(/(^|\/)paper\.pdf$/i.test(path)) recognized.paper ||=path;if(/(^|\/)references\.bib$/i.test(path)) recognized.bibliography ||=path;if(/^figures?\//i.test(path))recognized.figures.push(path);if(/^code\//i.test(path))recognized.code.push(path);if(/^logs\//i.test(path))recognized.logs.push(path);return item;});
-  if(bytes>OWNER_LIMITS.batchBytes) throw ownerError('The selected folder exceeds 20 MiB per publish. Use smaller batches or external storage.','BATCH_TOO_LARGE',413); return {files:items,bytes,recognized};
+  if(bytes>OWNER_LIMITS.batchBytes) throw ownerError('Repository upload bytes exceed the metadata publication transport capacity. Use the direct file upload queue.','BATCH_TOO_LARGE',413); return {files:items,bytes,recognized};
 }
 export function uploadAssetChanges(snapshot,{kind,slug,files,target='files',useReadme=false,useCover=false,usePaper=false}) {
   const analysis=analyzeUploadFiles(files),general=kind==='general'; if(!general && !CONTENT_KINDS.includes(kind)) throw ownerError('Choose an upload destination.'); if(general && !['files','images','documents'].includes(target)) throw ownerError('Choose a general asset folder.');

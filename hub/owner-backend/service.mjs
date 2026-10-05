@@ -2,13 +2,15 @@ import { digest, randomSecret, equalSecret, challenge, seal, unseal } from './cr
 import { GitHub, OwnerError, utf8Blob } from './github.mjs';
 import { bridgePage, authenticationCompletePage } from './bridge.mjs';
 import { assertAllowedPath, validateChangeSet } from '../src/lib/owner/policy.mjs';
+import { StorageService } from './storage.mjs';
 
 const COOKIE = '__Host-owner_session';
 const OAUTH_COOKIE = '__Host-owner_oauth';
 const SESSION_MS = 2 * 60 * 60 * 1000;
 const SHA = /^[a-f0-9]{40}$/;
 const MAX_REQUEST = 32 * 1024 * 1024;
-const RPC_METHODS = new Set(['session', 'snapshot', 'file', 'publish', 'history', 'status', 'logout']);
+const RPC_METHODS = new Set(['session', 'snapshot', 'file', 'publish', 'history', 'status', 'logout',
+  'storage-config', 'storage-start', 'storage-part', 'storage-complete', 'storage-abort', 'storage-resume', 'storage-delete', 'storage-sync', 'storage-import']);
 
 export function configuration(env) {
   const positiveId = name => {
@@ -37,11 +39,15 @@ export function configuration(env) {
   const repo = env.REPO_NAME || 'Z-hang-Homepage';
   const branch = env.BRANCH || 'main';
   if (owner !== 'Z-hang729' || repo !== 'Z-hang-Homepage' || branch !== 'main') throw new OwnerError('REPOSITORY_NOT_ALLOWED', '此后端只管理 Z-hang729/Z-hang-Homepage 的 main 分支。', 503);
+  const assetsRepo = env.ASSETS_REPO_NAME || null;
+  if (assetsRepo && assetsRepo !== 'Z-hang-Homepage-Assets') throw new OwnerError('REPOSITORY_NOT_ALLOWED', '附件仓库只能配置 Z-hang-Homepage-Assets。', 503);
   return { ownerId: positiveId('OWNER_GITHUB_ID'), appId: positiveId('GITHUB_APP_ID'),
     installationId: positiveId('GITHUB_INSTALLATION_ID'), repositoryId: positiveId('TARGET_REPOSITORY_ID'),
     clientId: env.GITHUB_CLIENT_ID, clientSecret: env.GITHUB_CLIENT_SECRET,
     encryptionKey: env.SESSION_ENCRYPTION_KEY, workerOrigin, origins, owner, repo, branch,
-    workflow: 'deploy.yml' };
+    workflow: 'deploy.yml', assetsRepo, assetsRepositoryId: assetsRepo ? positiveId('ASSETS_REPOSITORY_ID') : null,
+    r2AccountId: /^[a-f0-9]{32}$/i.test(env.R2_ACCOUNT_ID || '') ? env.R2_ACCOUNT_ID : null,
+    r2Bucket: env.R2_BUCKET || 'z-hang-homepage-files', r2AccessKeyId: env.R2_ACCESS_KEY_ID || null, r2SecretAccessKey: env.R2_SECRET_ACCESS_KEY || null };
 }
 
 function cookie(request, name) {
@@ -98,12 +104,13 @@ function isEditableText(path) {
 }
 
 export class OwnerService {
-  constructor(storage, config, fetcher = (...args) => fetch(...args), now = () => Date.now()) {
+  constructor(storage, config, fetcher = (...args) => fetch(...args), now = () => Date.now(), bindings = {}) {
     this.storage = storage;
     this.config = config;
     this.fetcher = fetcher;
     this.now = now;
     this.queue = Promise.resolve();
+    this.files = new StorageService(this, bindings);
   }
 
   async session(request) {
@@ -159,7 +166,8 @@ export class OwnerService {
     const exchange = await this.fetcher('https://github.com/login/oauth/access_token', { method: 'POST',
       headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'User-Agent': 'Z-hang-Owner-CMS' },
       body: JSON.stringify({ client_id: this.config.clientId, client_secret: this.config.clientSecret, code,
-        redirect_uri: `${this.config.workerOrigin}/auth/callback`, code_verifier: login.verifier, repository_id: String(this.config.repositoryId) }) });
+        redirect_uri: `${this.config.workerOrigin}/auth/callback`, code_verifier: login.verifier,
+        ...(!this.config.assetsRepo ? { repository_id: String(this.config.repositoryId) } : {}) }) });
     const grant = await exchange.json();
     if (!exchange.ok || !grant.access_token || grant.error || !Number.isFinite(grant.expires_in) || grant.expires_in <= 0) throw new OwnerError('OAUTH_EXCHANGE_FAILED', '请启用 GitHub App 的短期用户令牌，再重新登录。', 403);
     const github = new GitHub(this.config, grant.access_token, this.fetcher);
@@ -227,6 +235,7 @@ export class OwnerService {
     const contentPaths = new Set(params.changes.map(change => change.path));
     const snapshot = await this.snapshot(github, actualHead, contentPaths);
     const normalized = validateChangeSet(params.changes, { snapshotFiles: new Map(snapshot.files.map(file => [file.path, file])), allowTrustedMdx: true });
+    await this.files.validateMetadataChanges(normalized.changes);
     await this.storage.put(key, { fingerprint, expectedHead: actualHead, expiresAt: this.now() + 86400000 });
     try {
       const commit = await github.commit(actualHead, normalized.changes, message, publicationId);
@@ -260,6 +269,12 @@ export class OwnerService {
       return json({ authenticated: false }, 200, { 'Set-Cookie': setCookie(COOKIE, '', 0) });
     }
     const github = await this.github(session);
+    if (method === 'storage-delete') {
+      const task = this.queue.then(() => this.files.rpc(method, github, session, params));
+      this.queue = task.catch(() => {});
+      return json(await task);
+    }
+    if (method.startsWith('storage-')) return json(await this.files.rpc(method, github, session, params));
     if (method === 'snapshot') return json(await this.snapshot(github));
     if (method === 'file') {
       assertAllowedPath(params.path, { action: 'read' });
@@ -279,7 +294,9 @@ export class OwnerService {
     if (method === 'publish') {
       const task = this.queue.then(() => this.publish(github, session, params));
       this.queue = task.catch(() => {});
-      return json(await task);
+      const result = await task;
+      await this.files.markPublished(params.changes, result.commit.sha);
+      return json(result);
     }
     throw new OwnerError('METHOD_NOT_ALLOWED', '后端不支持此操作。');
   }
@@ -289,6 +306,21 @@ export class OwnerService {
       const url = new URL(request.url);
       if (url.origin !== this.config.workerOrigin) throw new OwnerError('ORIGIN_NOT_ALLOWED', '后端请求 origin 无效。', 403);
       const path = url.pathname.replace(/\/$/, '') || '/';
+      if (path.startsWith('/storage/')) {
+        try {
+          if (request.method === 'OPTIONS') return this.files.options(request);
+          const upload = /^\/storage\/upload\/([a-f0-9-]+)$/i.exec(path);
+          if (upload && request.method === 'PUT') return await this.files.upload(request, upload[1]);
+          const publicFile = /^\/storage\/public\/([a-f0-9-]+)$/i.exec(path);
+          if (publicFile && ['GET', 'HEAD'].includes(request.method)) return await this.files.publicFile(request, publicFile[1]);
+          throw new OwnerError('NOT_FOUND', '文件路由不存在。', 404);
+        } catch (error) {
+          const response = errorResponse(error);
+          const responseHeaders = new Headers(response.headers);
+          for (const [name, value] of Object.entries(this.files.errorHeaders(request))) responseHeaders.set(name, value);
+          return new Response(response.body, { status: response.status, headers: responseHeaders });
+        }
+      }
       if (request.method === 'GET' && path === '/bridge') {
         if (!this.config.origins.includes(url.searchParams.get('client_origin'))) throw new OwnerError('ORIGIN_NOT_ALLOWED', '网站 origin 未被后端授权。', 403);
         const nonce = randomSecret(16);
@@ -311,11 +343,17 @@ export class OwnerService {
   }
 
   async cleanup() {
-    const records = await this.storage.list({ limit: 1000 });
     const now = this.now();
-    for (const [key, record] of records) {
-      if ((record?.expiresAt && record.expiresAt <= now) || (key.startsWith('rate:') && Number(key.split(':')[1]) < Math.floor(now / 60000) - 10)) await this.storage.delete(key);
+    let cursor = await this.storage.get('maintenance:cursor') || undefined;
+    for (let page = 0; page < 10; page++) {
+      const records = await this.storage.list({ limit: 500, ...(cursor ? { startAfter: cursor } : {}) });
+      for (const [key, record] of records) {
+        cursor = key;
+        if ((record?.expiresAt && record.expiresAt <= now) || (key.startsWith('rate:') && Number(key.split(':')[1]) < Math.floor(now / 60000) - 10)) await this.storage.delete(key);
+      }
+      if (records.size < 500) { await this.storage.delete('maintenance:cursor'); return; }
     }
+    await this.storage.put('maintenance:cursor', cursor);
   }
 }
 

@@ -1,0 +1,15 @@
+---
+import {url} from '../lib/site';
+import {formatFileSize,stableFilePath,originalDownloadURL} from '../lib/files.mjs';
+interface Props {file:any;}
+const {file}=Astro.props;
+const symbols:Record<string,string>={pdf:'PDF',image:'IMG',markdown:'MD',text:'CODE',json:'JSON',csv:'TABLE',notebook:'NB',fits:'FITS',audio:'AUDIO',video:'VIDEO',office:'DOC',download:'FILE'};
+---
+<article class="file-card" data-file-card data-file-name={`${file.displayName} ${file.relativePath} ${file.description} ${(file.tags||[]).join(' ')}`}>
+  <span class="file-badge" aria-hidden="true">{symbols[file.previewType]||'FILE'}</span>
+  <div class="file-card-content"><h3><a href={url(stableFilePath(file.id))}>{file.displayName}</a></h3><p class="file-card-path">{file.relativePath}</p>{file.description&&<p>{file.description}</p>}<small>{formatFileSize(file.size)} · {file.extension?.toUpperCase()||'FILE'} · {file.updatedAt.slice(0,10)}</small>
+  <div class="file-actions"><a href={url(stableFilePath(file.id))}>Preview ↗</a><a href={url(originalDownloadURL(file))} download={file.originalName}>Download ↓</a><button type="button" data-file-copy={url(stableFilePath(file.id))}>Copy link</button></div></div>
+</article>
+<style>
+ .file-card{display:flex;gap:1rem;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:1.15rem;background:var(--surface);min-width:0}.file-badge{font:600 .65rem var(--font-mono);color:var(--accent);border-radius:7px;background:var(--accent-soft);min-width:3rem;padding:.8rem .3rem;text-align:center;flex-shrink:0}.file-card-content{min-width:0;flex:1}.file-card h3{font:600 1rem var(--font-sans);margin:0 0 .3rem;overflow-wrap:anywhere}.file-card p{margin:.3rem 0;overflow-wrap:anywhere}.file-card-path,.file-card small{color:var(--muted);font-size:.8rem}.file-actions{display:flex;flex-wrap:wrap;gap:.8rem;margin-top:.7rem;color:var(--accent);font-size:.82rem}.file-actions button{border:0;background:none;padding:0;font:inherit;color:inherit;cursor:pointer}.file-actions a:hover,.file-actions button:hover{text-decoration:underline}
+</style>

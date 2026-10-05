@@ -1,6 +1,8 @@
 import { el, button, modal, inputField, selectField, formAction } from './dom.js';
 import { analyzeUploadFiles, uploadAssetChanges, importFolderChanges, generateSlug, normalizeTags, assetURL, moveAssetChanges, deleteAssetChanges } from '../lib/owner/model.mjs';
 import { OWNER_LIMITS, safeRelativePath, validateAsset, encodeBase64, decodeBase64 } from '../lib/owner/policy.mjs';
+import { selectionsFromDrop } from './storage-upload.js';
+import { formatFileSize } from '../lib/files.mjs';
 
 const KINDS = ['general', 'research', 'notes', 'projects'];
 const ASSET_GROUPS = ['images', 'documents', 'files', 'research', 'notes', 'projects'];
@@ -9,7 +11,7 @@ const CREATE_NEW = '__create_new__';
 const MIME = { pdf: 'application/pdf', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', avif: 'image/avif', bmp: 'image/bmp', zip: 'application/zip' };
 
 export function formatBytes(value = 0) {
-  return value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KB` : `${(value / 1048576).toFixed(2)} MB`;
+  return formatFileSize(value);
 }
 
 export function publicAssetPath(path, base = '/') {
@@ -36,37 +38,8 @@ export function normalizeSelectedPaths(selections) {
   return { root, selections: selections.map(item => ({ ...item, originalPath: item.path, path: root ? item.path.slice(root.length + 1) : item.path })) };
 }
 
-async function readEntry(entry, prefix, selections, budget, depth = 0) {
-  if (depth > 20 || budget.visited++ > 1000) throw new Error('This folder is too deep or contains too many files. Select a smaller folder.');
-  const path = prefix ? `${prefix}/${entry.name}` : entry.name;
-  if (entry.isFile) {
-    const file = await new Promise((resolve, reject) => entry.file(resolve, reject));
-    selections.push({ file, path });
-  } else if (entry.isDirectory) {
-    const reader = entry.createReader();
-    while (true) {
-      const children = await new Promise((resolve, reject) => reader.readEntries(resolve, reject));
-      if (!children.length) break;
-      for (const child of children) await readEntry(child, path, selections, budget, depth + 1);
-    }
-  }
-}
-
-async function readHandle(handle, prefix, selections, budget, depth = 0) {
-  if (depth > 20 || budget.visited++ > 1000) throw new Error('This folder is too deep or contains too many files. Select a smaller folder.');
-  const path = prefix ? `${prefix}/${handle.name}` : handle.name;
-  if (handle.kind === 'file') selections.push({ file: await handle.getFile(), path });
-  else if (handle.kind === 'directory') for await (const child of handle.values()) await readHandle(child, path, selections, budget, depth + 1);
-}
-
 async function droppedFiles(items, fallbackFiles) {
-  const selections = [], budget = { visited: 0 };
-  for (const item of items) {
-    if (item.entry) await readEntry(item.entry, '', selections, budget);
-    else if (item.handle) await readHandle(await item.handle, '', selections, budget);
-    else if (item.file) selections.push({ file: item.file, path: item.file.name });
-  }
-  return selections.length ? selections : Array.from(fallbackFiles, file => ({ file, path: file.name }));
+  return selectionsFromDrop(items, fallbackFiles);
 }
 
 function checkbox(label) {
@@ -85,7 +58,12 @@ async function stage(ctx, changes, message) {
   ctx.notice(message);
 }
 
-export async function openUploads(ctx, { kind = 'general', slug, target = 'files' } = {}) {
+export async function openUploads(ctx, options = {}) {
+  if (ctx.transport?.mode === 'github') return (await import('./storage.js')).openStorageUploads(ctx, options);
+  return openLegacyUploads(ctx, options);
+}
+
+async function openLegacyUploads(ctx, { kind = 'general', slug, target = 'files' } = {}) {
   const surface = modal('Upload files or a folder', 'Preview the selected files, then add them to your draft. Nothing is published until Publish Changes.');
   const destination = selectField('Upload to', KINDS.includes(kind) ? kind : 'general', [
     { value: 'general', label: 'General assets' }, { value: 'research', label: 'Research' }, { value: 'notes', label: 'Notes / Course' }, { value: 'projects', label: 'Project' },
@@ -110,7 +88,7 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
     el('div', { class: 'owner-form-grid' }, newTitle.node, newDescription.node, newSlug.node, newDate.node, newTags.node), courseFields, newStatus.node);
   const list = el('div', { class: 'owner-upload-preview', 'aria-live': 'polite' });
   const recognition = el('div', { class: 'owner-upload-recognition' });
-  const summary = el('p', { class: 'owner-muted' }, 'Choose files or a folder. Maximum 10 MB per file, 20 MB per publish and 250 changed files.');
+  const summary = el('p', { class: 'owner-muted' }, 'Choose small website assets or a folder. Online Owner uploads use the separate storage queue.');
   const readme = checkbox('Use the recognized README as the article overview (replaces its current body).');
   const cover = checkbox('Use the recognized cover image.');
   const paper = checkbox('Use the recognized paper PDF.');
@@ -201,9 +179,8 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
           const canonical = selection.path.normalize('NFKC').toLowerCase();
           if (seen.has(canonical)) throw new Error('Duplicate or case-colliding filename.');
           seen.add(canonical);
-          if (accepted.length >= OWNER_LIMITS.files) throw new Error('More than 250 files; choose a smaller selection.');
-          if (selection.file.size > OWNER_LIMITS.fileBytes) throw new Error('Larger than 10 MB; use an external research download link.');
-          if (bytes + selection.file.size > OWNER_LIMITS.batchBytes) throw new Error('This selection exceeds 20 MB; choose a smaller batch.');
+          if (selection.file.size > OWNER_LIMITS.fileBytes) throw new Error(`Larger than GitHub's ${formatBytes(OWNER_LIMITS.fileBytes)} repository file capacity. Use the online storage queue.`);
+          if (bytes + selection.file.size > OWNER_LIMITS.batchBytes) throw new Error(`This inline repository draft exceeds the ${formatBytes(OWNER_LIMITS.batchBytes)} publication request capacity. Use the online storage queue for binary attachments.`);
           const raw = new Uint8Array(await selection.file.arrayBuffer());
           if (generation !== sequence || !surface.dialog.isConnected) return;
           validateAsset(`hub/public/uploads/files/${selection.path}`, raw, selection.file.type);
@@ -249,7 +226,7 @@ export async function openUploads(ctx, { kind = 'general', slug, target = 'files
     }
   });
   surface.body.append(destinationGroup, newEntry, drop, summary, recognition, acceptPartial.node, list);
-  surface.body.append(el('p', { class: 'owner-muted' }, 'Limits: 10 MB per file, 20 MB per publish, 250 changed files including generated reading copies.'));
+  surface.body.append(el('p', { class: 'owner-muted' }, `Repository assets use the ${formatBytes(OWNER_LIMITS.fileBytes)} GitHub file capacity and ${formatBytes(OWNER_LIMITS.batchBytes)} inline draft request capacity. Online direct uploads store binaries separately and publish their metadata only.`));
   surface.body.append(el('p', { class: 'owner-muted' }, 'Folder picking works in current Chrome, Edge and Safari. If a browser does not expose directories, use Choose files to select multiple materials. Scientific images keep their original resolution.'));
   const save = formAction(surface, 'Add to draft', async () => {
     if (preparing || !analysis) throw new Error('Wait for the file preview to finish.');
@@ -337,7 +314,7 @@ async function replaceAsset(ctx, file, render) {
     try {
       const source = picker.files?.[0];
       if (!source) { detail.textContent = 'No replacement selected.'; return; }
-      if (source.size > OWNER_LIMITS.fileBytes) throw new Error('Replacement exceeds 10 MB.');
+      if (source.size > OWNER_LIMITS.fileBytes) throw new Error(`Replacement exceeds the ${formatBytes(OWNER_LIMITS.fileBytes)} GitHub repository file capacity. Use the online storage queue.`);
       const bytes = new Uint8Array(await source.arrayBuffer());
       if (generation !== sequence || !surface.dialog.isConnected) return;
       validateAsset(file.path, bytes, source.type);
@@ -363,6 +340,11 @@ async function replaceAsset(ctx, file, render) {
 }
 
 export async function openFiles(ctx) {
+  if (ctx.transport?.mode === 'github') return (await import('./storage.js')).openStorageFiles(ctx, { openLegacy: openLegacyFiles });
+  return openLegacyFiles(ctx);
+}
+
+async function openLegacyFiles(ctx) {
   const surface = modal('File manager', 'Manage uploaded public materials. Every change stays in your draft until Publish Changes.');
   const search = inputField('Search filenames', '');
   const category = selectField('Folder', 'all', [{ value: 'all', label: 'All uploaded assets' }, ...ASSET_GROUPS.map(value => ({ value, label: value }))]);

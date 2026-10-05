@@ -1,0 +1,11 @@
+const report=(el,text)=>{const status=el.closest('section,[data-file-detail]')?.querySelector('[data-file-status]');if(status)status.textContent=text;};
+document.querySelectorAll('[data-file-copy]').forEach(button=>button.addEventListener('click',async()=>{const url=new URL(button.dataset.fileCopy,location.origin).href;try{await navigator.clipboard.writeText(url);report(button,'File link copied.');}catch{report(button,`Copy this link: ${url}`);}}));
+document.querySelector('[data-file-search]')?.addEventListener('input',event=>{const q=event.target.value.trim().toLocaleLowerCase();document.querySelectorAll('[data-file-card]').forEach(card=>card.hidden=!card.dataset.fileName.toLocaleLowerCase().includes(q));});
+document.querySelectorAll('[data-folder-download]').forEach(button=>button.addEventListener('click',async()=>{
+ const files=JSON.parse(button.dataset.folderDownload),total=files.reduce((n,f)=>n+f.size,0);let stream;
+ try{if('showSaveFilePicker'in window){const handle=await window.showSaveFilePicker({suggestedName:`${button.dataset.folderName||'folder'}.zip`,types:[{description:'ZIP archive',accept:{'application/zip':['.zip']}}]});stream=await handle.createWritable();}else if(total>512*1024**2){report(button,'This folder needs a browser with streaming save support, such as Chrome or Edge. Individual original downloads remain available.');return;}
+ button.disabled=true;const {ZipWriter,BlobWriter,HttpReader}=await import('@zip.js/zip.js');const writer=new ZipWriter(stream||new BlobWriter('application/zip'),{useWebWorkers:false});let done=0;
+ for(const file of files){report(button,`Downloading folder: ${++done}/${files.length}`);await writer.add(file.name,new HttpReader(file.url,{useRangeHeader:true,forceRangeRequests:false}),{level:0});}
+ const blob=await writer.close();if(!stream){const href=URL.createObjectURL(blob),anchor=document.createElement('a');anchor.href=href;anchor.download=`${button.dataset.folderName||'folder'}.zip`;anchor.click();setTimeout(()=>URL.revokeObjectURL(href),60000);}report(button,'Folder download complete.');
+ }catch(error){await stream?.abort?.().catch(()=>{});if(error.name!=='AbortError')report(button,`Folder download failed: ${error.message}. Retry or download individual files.`);}finally{button.disabled=false;}
+}));

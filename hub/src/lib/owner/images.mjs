@@ -19,7 +19,7 @@ export function imageAssetPath(value,base='') {
 export async function prepareImage(file) {
   if(!file||typeof file.arrayBuffer!=='function'||!DISPLAY_IMAGE.test(file.name||''))throw new Error('Choose PNG, JPEG, GIF, WebP, AVIF or BMP. SVG and active web files are excluded.');
   safeRelativePath(file.name);
-  if(file.size>OWNER_LIMITS.fileBytes)throw new Error('Images must be at most 10 MiB. Keep larger scientific originals in external storage.');
+  if(file.size>OWNER_LIMITS.fileBytes)throw new Error('This image exceeds the repository provider capacity. Use direct file storage for the scientific original.');
   const bytes=new Uint8Array(await file.arrayBuffer());
   validateAsset('hub/public/uploads/images/'+file.name,bytes,file.type||'');
   return {name:file.name,mime:file.type||MIME[file.name.split('.').pop().toLowerCase()],bytes,content:encodeBase64(bytes),encoding:'base64',size:bytes.length};

@@ -87,10 +87,10 @@ test('imported reading routes require their real Markdown source file', async t 
 test('invalid FITS signatures and large repository assets are rejected', async t => {
   const { root, put } = await fixture(t);
   await put('public/uploads/raw.fits', 'science data');
-  await put('public/uploads/large.pdf', Buffer.alloc(10 * 1024 * 1024 + 1));
+  await put('public/uploads/large.pdf', Buffer.alloc(100 * 1024 * 1024 + 1));
   const result = await validateContent(root);
   assert.ok(result.errors.some(error => error.includes('do not match .fits')));
-  assert.ok(result.errors.some(error => error.includes('10 MiB')));
+  assert.ok(result.errors.some(error => error.includes('provider capacity')));
 });
 
 test('HTML link checker handles base paths, relative links, query strings and headings', async t => {

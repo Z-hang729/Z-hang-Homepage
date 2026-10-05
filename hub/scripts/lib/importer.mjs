@@ -6,10 +6,11 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import { rejectSymlinkOutput } from './path-safety.mjs';
+import {STORAGE_LIMITS} from '../../src/lib/files.mjs';
 
-export const MAX_FILE_BYTES = 10 * 1024 * 1024;
-export const MAX_IMPORT_BYTES = 100 * 1024 * 1024;
-export const MAX_IMPORT_FILES = 1000;
+export const MAX_FILE_BYTES = STORAGE_LIMITS.repositoryBytes;
+export const MAX_IMPORT_BYTES = Number.MAX_SAFE_INTEGER;
+export const MAX_IMPORT_FILES = Number.MAX_SAFE_INTEGER;
 export const KINDS = ['research', 'notes', 'projects'];
 const RAW_EXTENSIONS = new Set(['.fits', '.fit', '.fts', '.sav', '.zip', '.tar', '.gz', '.7z', '.rar', '.mp4', '.mov', '.avi', '.mkv', '.webm', '.h5', '.hdf5', '.hdf', '.nc', '.npy', '.npz', '.dat', '.bin', '.sqlite', '.db']);
 const IMAGE_EXTENSIONS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.avif']);
@@ -45,7 +46,7 @@ export function omissionReason(relativePath, bytes, isSymlink = false) {
   if (segments.some((part) => part.startsWith('.') || /^(node_modules|dist|venv|__pycache__|private|secrets?)$/i.test(part))) return 'Hidden, generated, or private path';
   if (/(^|\/)(credentials?|tokens?|id_rsa|id_ed25519|authorized_keys|known_hosts|.*\.pem|.*\.key|.*\.p12|.*\.pfx|.*\.keystore|.*\.env)(\.|$)/i.test(relativePath)) return 'Potential credential or secret file';
   if (RAW_EXTENSIONS.has(path.extname(relativePath).toLowerCase())) return 'Raw scientific data, archive, database, or video: publish an external data link instead';
-  if (bytes > MAX_FILE_BYTES) return 'File exceeds 10 MiB';
+  if (bytes > MAX_FILE_BYTES) return 'File exceeds GitHub repository capacity; use direct file storage';
   if (/\.(exe|dll|bat|cmd|ps1|com|msi|scr|html?|svg)$/i.test(relativePath)) return 'Executable or active web content is excluded';
   return null;
 }
@@ -138,11 +139,9 @@ async function collectFolder(source) {
       if (info.isDirectory()) await walk(fullPath, relativePath);
       else if (info.isFile()) files.push({ path: relativePath, bytes: info.size, source: fullPath });
       else omitted.push({ path: relativePath, bytes: info.size, reason: 'Non-regular file' });
-      if (files.length + omitted.length > MAX_IMPORT_FILES) throw new Error('Import exceeds 1000 files. Split this archive into smaller projects.');
     }
   }
   await walk(source);
-  if (files.reduce((sum, file) => sum + file.bytes, 0) > MAX_IMPORT_BYTES) throw new Error('Import exceeds 100 MiB. Publish large materials externally.');
   return { files, omitted };
 }
 
@@ -208,7 +207,7 @@ export async function importFolder({ source, root = process.cwd(), kind, metadat
 }
 
 export async function validateUploadFiles(files) {
-  if (!Array.isArray(files) || !files.length || files.length > MAX_IMPORT_FILES) throw new Error('Supply 1–1000 files.');
+  if (!Array.isArray(files) || !files.length) throw new Error('Supply at least one file.');
   const names = new Set(), omitted = [], accepted = []; let total = 0;
   for (const file of files) {
     const relativePath = safeRelativePath(file.path), canonical = relativePath.normalize('NFKC').toLowerCase();
@@ -221,7 +220,7 @@ export async function validateUploadFiles(files) {
     }
     if (typeof file.data !== 'string' || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(file.data)) throw new Error('Malformed base64 file.');
     const buffer = Buffer.from(file.data, 'base64'); total += buffer.length;
-    if (buffer.length > MAX_FILE_BYTES || total > MAX_IMPORT_BYTES) throw new Error('Upload is too large: 10 MiB per file, 100 MiB per import.');
+    if (buffer.length > MAX_FILE_BYTES) throw new Error('This exceeds the GitHub repository capacity. Use direct file storage.');
     accepted.push({ path: relativePath, buffer });
   }
   return { files: accepted, omitted };

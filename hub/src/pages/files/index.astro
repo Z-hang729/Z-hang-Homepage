@@ -1,0 +1,8 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import FileResources from '../../components/FileResources.astro';
+import {getFiles} from '../../lib/file-records';
+const files=getFiles().filter(f=>f.visibility==='public');
+---
+<BaseLayout title="Files" description="Original files, course resources and research attachments."><div class="container section"><p class="eyebrow">THE FILE LIBRARY</p><h1>Files</h1><p class="section-description">Browse original files and their previews.</p><label class="file-search">Search files <input type="search" data-file-search placeholder="Name, folder, description or tags"/></label><FileResources files={files} title="File library"/>{!files.length&&<p class="section-description">Published files will appear here.</p>}</div></BaseLayout>
+<style>.file-search{display:flex;flex-direction:column;gap:.5rem;max-width:550px;margin:2rem 0}.file-search input{padding:.8rem;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font:inherit}</style>

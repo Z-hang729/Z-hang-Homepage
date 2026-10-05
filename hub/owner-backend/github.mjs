@@ -45,10 +45,13 @@ export class GitHub {
       throw new OwnerError('APP_PERMISSION_MISMATCH', 'GitHub App 必须只授权目标仓库和规定的最小权限。', 403);
     }
     const accessible = await this.request(`/user/installations/${this.config.installationId}/repositories?per_page=100`);
-    const repository = accessible.repositories?.find(item => item.id === this.config.repositoryId);
-    if (accessible.total_count !== 1 || !repository || repository.owner?.id !== this.config.ownerId ||
-      repository.full_name?.toLowerCase() !== `${this.config.owner}/${this.config.repo}`.toLowerCase() || !repository.permissions?.push) {
-      throw new OwnerError('REPOSITORY_NOT_ALLOWED', 'GitHub App 安装必须只选择 Z-hang-Homepage，且 Owner 具有写入权限。', 403);
+    const targets = [{ id: this.config.repositoryId, name: this.config.repo },
+      ...(this.config.assetsRepo ? [{ id: this.config.assetsRepositoryId, name: this.config.assetsRepo }] : [])];
+    if (accessible.total_count !== targets.length || targets.some(target => {
+      const repository = accessible.repositories?.find(item => item.id === target.id);
+      return !repository || repository.owner?.id !== this.config.ownerId || repository.full_name?.toLowerCase() !== `${this.config.owner}/${target.name}`.toLowerCase() || !repository.permissions?.push;
+    })) {
+      throw new OwnerError('REPOSITORY_NOT_ALLOWED', 'GitHub App 安装必须只选择已配置的网站和附件仓库，且 Owner 具有写入权限。', 403);
     }
     return { id: user.id, login: user.login, avatarUrl: user.avatar_url };
   }

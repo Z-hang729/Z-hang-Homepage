@@ -1,0 +1,22 @@
+---
+import FileCard from './FileCard.astro';
+import {getFiles} from '../lib/file-records';
+import {url} from '../lib/site';
+import {stableFilePath,originalDownloadURL} from '../lib/files.mjs';
+interface Props {kind?:string;slug?:string;files?:any[];title?:string;}
+const {kind,slug,title='Files'}=Astro.props;
+const files=Astro.props.files||getFiles({kind,slug});
+type Tree={dirs:Map<string,Tree>;files:any[]};
+const root:Tree={dirs:new Map(),files:[]};
+for(const file of files.filter(f=>!f.isFolderBundle)){const parts=file.relativePath.split('/');let node=root;for(const part of parts.slice(0,-1)){if(!node.dirs.has(part))node.dirs.set(part,{dirs:new Map(),files:[]});node=node.dirs.get(part)!;}node.files.push(file);}
+const escape=(s:string)=>s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]!));
+function treeHTML(tree:Tree):string{return '<ul>'+[...tree.dirs].map(([name,node])=>'<li><details open><summary>'+escape(name)+'</summary>'+treeHTML(node)+'</details></li>').join('')+tree.files.map(f=>'<li><a href="'+escape(url(stableFilePath(f.id)))+'">'+escape(f.displayName)+'</a></li>').join('')+'</ul>';}
+const folders=[...new Map(files.filter(f=>f.folderId).map(f=>[f.folderId,{id:f.folderId,name:f.folderName||'Folder',bundle:files.find(b=>b.folderId===f.folderId&&b.isFolderBundle),files:files.filter(b=>b.folderId===f.folderId&&!b.isFolderBundle)}])).values()];
+---
+{files.length>0&&<section class="article-section file-resources" id="file-resources"><h2>{title}</h2>
+ {folders.length>0&&<div class="folder-downloads" data-pagefind-ignore>{folders.map(folder=><div><strong>{folder.name}</strong> · {folder.files.length} files <button type="button" data-folder-download={JSON.stringify(folder.files.map(f=>({name:f.relativePath,url:url(originalDownloadURL(f)),size:f.size})))} data-folder-name={folder.name}>Download current folder ↓</button>{folder.bundle&&<a href={url(originalDownloadURL(folder.bundle))} download>Uploaded ZIP snapshot ↓</a>}</div>)}</div>}
+ {root.dirs.size>0&&<details class="file-folders"><summary>Folder structure</summary><nav class="file-tree" aria-label="Original file structure" set:html={treeHTML(root)}/></details>}
+ <div class="file-grid">{files.filter(f=>!f.isFolderBundle).map(file=><FileCard file={file}/>)}</div><p data-file-status role="status" data-pagefind-ignore></p>
+</section>}
+<script>import '../file-preview/library.js';</script>
+<style>.file-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:.85rem}.file-folders{margin:1rem 0}.folder-downloads{margin:1rem 0;color:var(--muted);font-size:.86rem}.folder-downloads a,.folder-downloads button{color:var(--accent);margin-left:.6rem}.folder-downloads button{border:0;background:none;font:inherit;cursor:pointer}.file-folders summary{cursor:pointer}</style>
