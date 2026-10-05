@@ -1,24 +1,30 @@
 ---
-title: Electrodynamics
-description: A demonstration SI-units reference for Maxwell equations, phasor signs, and plane-wave checks.
-date: 2026-09-08
-updated: 2026-09-29
-category: Physics
-semester: 2026 Fall
-course: Electrodynamics
-progress: 15
-tags: [Physics, Electrodynamics, Mathematics, Course Notes]
+title: Electromagnetism
+description: 何琼毅老师电磁学
+date: 2026-10-02
+updated: 2026-10-06
+tags:
+  - Physics
+  - Electromagnetism
+  - Course Notes
 featured: true
 demo: true
 attachments:
   - title: Demonstration archive handout
     url: /documents/demo-handout.pdf
     type: pdf
+references: []
+category: Physics
+semester: 2026 Spring
+course: Electromagnetism
+progress: 100
+order: 0
+courseCode: "00431143"
+year: "2026"
+courseType: 专业必修
+instructor: Qiongyi He
+cover: /uploads/images/a12c0c30-3db8-4f3d-bf45-dad47077423b/Electromagnetism.png
 ---
-
-## Scope and conventions
-
-This **Demo** is a reading-format example. It is not an official course handout or a completed course record. SI units are used; in the vacuum equations below $\epsilon_0$ and $\mu_0$ are constants.
 
 ## Maxwell equations
 
