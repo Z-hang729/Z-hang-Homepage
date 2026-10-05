@@ -5,7 +5,7 @@ supportedLanguages:
   - en
   - zh-CN
 languageSwitcherEnabled: false
-tagline: Exploring the Sun, space, and computation.
+tagline: ""
 heroFirstLine: Between the
 heroSecondLine: Sun & the code.
 university: Peking University
@@ -13,7 +13,7 @@ affiliation: 北京大学 · Peking University
 role: Undergraduate student · 2024
 degree: Space Physics
 secondDegree: Computer Science and Technology
-secondDegreeShort: Computer Science
+secondDegreeShort: ""
 bio: I am an undergraduate at Peking University, studying space physics and computer science.
 bioZh: ""
 email: z.hang06.729@gmail.com
@@ -29,14 +29,24 @@ currently:
     text: Space physics
   - label: Learning
     text: Physics × computation
-  - label: Building
-    text: An open academic garden
 education:
+  - start: "2012"
+    end: "2018"
+    institution: Experimental Primary School of Horqin District, Tongliao City
+    description: 小学
+  - start: "2018"
+    end: "2021"
+    institution: No.4 Middle School of Horqin District, Tongliao City
+    description: 初中
+  - start: "2021"
+    end: "2024"
+    institution: Tongliao No.5 Senior High School
+    description: 高中
   - start: "2024"
     end: Present
     institution: Peking University
     description: Undergraduate · Space Physics
-  - start: 2024 cohort
+  - start: "2026"
     end: Present
     institution: Peking University
     description: Second degree · Computer Science and Technology
