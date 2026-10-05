@@ -292,11 +292,15 @@ export class OwnerService {
       return json(await github.status(params.sha));
     }
     if (method === 'publish') {
-      const task = this.queue.then(() => this.publish(github, session, params));
+      const task = this.queue.then(async () => {
+        const result = await this.publish(github, session, params);
+        // Keep the durable file-pointer update in the same serialized task as
+        // its commit. A following publish/delete must observe both together.
+        await this.files.markPublished(github, params.changes, result.commit.sha);
+        return result;
+      });
       this.queue = task.catch(() => {});
-      const result = await task;
-      await this.files.markPublished(params.changes, result.commit.sha);
-      return json(result);
+      return json(await task);
     }
     throw new OwnerError('METHOD_NOT_ALLOWED', '后端不支持此操作。');
   }

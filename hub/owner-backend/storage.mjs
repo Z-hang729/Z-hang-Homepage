@@ -90,7 +90,7 @@ export async function presignR2(config, key, { partNumber, uploadId, checksumMD5
 }
 
 export class StorageService {
-  constructor(service, bindings = {}) { this.service = service; this.store = service.storage; this.config = service.config; this.bucket = bindings.FILE_BUCKET; }
+  constructor(service, bindings = {}) { this.service = service; this.store = service.storage; this.config = service.config; this.bucket = bindings.FILE_BUCKET; this.releaseQueue = Promise.resolve(); }
   get now() { return this.service.now(); }
   get r2Ready() { return Boolean(this.bucket && this.config.r2AccountId && this.config.r2AccessKeyId && this.config.r2SecretAccessKey && this.config.r2Bucket); }
   get releaseRepo() { return this.config.assetsRepo || this.config.repo; }
@@ -144,14 +144,21 @@ export class StorageService {
     await this.store.put(`upload:${sessionId}`, record);
     return this.describe(record, session);
   }
-  async release(github) {
+  release(github) {
+    const task = this.releaseQueue.then(() => this.reserveRelease(github));
+    this.releaseQueue = task.catch(() => {});
+    return task;
+  }
+  async reserveRelease(github) {
     const key = `storage:release:${this.releaseRepo}`;
     const prior = await this.store.get(key);
-    if (prior?.id && prior.count < 950) return prior;
+    // Reserve a slot before issuing a transfer, including paused sessions.
+    // Only selection/creation is serialized; the binary transfers stay parallel.
+    if (prior?.id && prior.count < 950) { prior.count++; await this.store.put(key, prior); return prior; }
     const tag = `homepage-files-${new Date(this.now).toISOString().slice(0, 7)}-${crypto.randomUUID().slice(0, 8)}`;
     const created = await github.request(`${this.releaseBase}/releases`, { method: 'POST', body: JSON.stringify({ tag_name: tag, target_commitish: 'main', name: `Homepage files · ${tag}`, body: 'Original file attachments for Z-hang Homepage. Metadata is published separately in the website repository.', draft: false, prerelease: true }) });
     if (!Number.isSafeInteger(created.id)) fail('INVALID_RELEASE', 'GitHub 未返回有效附件 Release。', 502);
-    const record = { id: created.id, tag, count: 0 };
+    const record = { id: created.id, tag, count: 1 };
     await this.store.put(key, record);
     return record;
   }
@@ -247,13 +254,16 @@ export class StorageService {
       githubAssetId: asset.id, sha256: providerHash || file.sha256, uploadedAt: asset.created_at || file.uploadedAt, updatedAt: asset.updated_at || file.updatedAt };
   }
   async savePending(record) {
-    const prior = await this.store.get(`file:${record.id}`);
     const asset = { file: record.file, ownerId: record.ownerId, uploadSessionId: record.sessionId,
       provider: record.provider, storageKey: record.storageKey, releaseRepo: this.releaseRepo, releaseId: record.releaseId,
       githubAssetId: record.file.githubAssetId, createdAt: this.now };
-    await this.store.put(`asset:${record.sessionId}`, asset);
-    await this.store.put(`file:${record.id}`, { ownerId: record.ownerId, current: prior?.current || null, pending: asset });
+    await this.transaction(async store => {
+      const prior = await store.get(`file:${record.id}`);
+      await store.put(`asset:${record.sessionId}`, asset);
+      await store.put(`file:${record.id}`, { ownerId: record.ownerId, current: prior?.current || null, pending: asset });
+    });
   }
+  transaction(callback) { return typeof this.store.transaction === 'function' ? this.store.transaction(callback) : callback(this.store); }
   async upload(request, sessionId) {
     const origin = request.headers.get('Origin');
     if (!this.config.origins.includes(origin)) fail('ORIGIN_NOT_ALLOWED', '上传来源未授权。', 403);
@@ -302,9 +312,6 @@ export class StorageService {
       record.state = 'uploaded';
       delete record.ticketHash;
       await this.store.put(`upload:${sessionId}`, record);
-      const key = `storage:release:${this.releaseRepo}`;
-      const release = await this.store.get(key);
-      if (!prior && release?.id === record.releaseId) { release.count++; await this.store.put(key, release); }
       return new Response(JSON.stringify({ uploaded: true, sessionId }), { headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...cors(origin, this.config) } });
     } catch (error) {
       const latest = await this.store.get(`upload:${sessionId}`);
@@ -333,27 +340,74 @@ export class StorageService {
       if (!candidate || file.id !== match[1] || file.storageProvider !== candidate.file.storageProvider || file.size !== candidate.file.size || file.previewUrl !== candidate.file.previewUrl || file.sha256 !== candidate.file.sha256 || file.githubAssetId !== candidate.file.githubAssetId) fail('UNVERIFIED_FILE_METADATA', '附件元数据必须来自已完成的安全上传或导入。', 409);
     }
   }
-  async markPublished(changes, sha) {
-    for (const change of changes) {
-      const match = /^hub\/src\/data\/files\/([a-f0-9-]+)\.json$/i.exec(change.path);
-      if (!match) continue;
-      const record = await this.store.get(`file:${match[1]}`);
-      if (!record) continue;
-      if (change.action === 'delete') record.current = null;
-      else {
-        const file = JSON.parse(change.content);
-        const candidate = [record.pending, record.current].find(asset => asset?.file.storageKey === file.storageKey);
-        if (candidate) { record.current = { ...candidate, file, publicationSha: sha }; if (record.pending?.storageKey === candidate.storageKey) record.pending = null; }
-      }
-      await this.store.put(`file:${match[1]}`, record);
+  matchesFile(asset, file) {
+    return Boolean(asset?.file && asset.file.id === file.id && asset.file.storageKey === file.storageKey && asset.file.downloadUrl === file.downloadUrl &&
+      asset.file.previewUrl === file.previewUrl && asset.file.storageProvider === file.storageProvider && asset.file.size === file.size &&
+      asset.file.sha256 === file.sha256 && asset.file.githubAssetId === file.githubAssetId);
+  }
+  async historicAsset(store, file) {
+    let cursor;
+    while (true) {
+      const records = await store.list({ prefix: 'asset:', limit: 250, ...(cursor ? { startAfter: cursor } : {}) });
+      for (const [key, asset] of records) { cursor = key; if (this.matchesFile(asset, file)) return asset; }
+      if (records.size < 250) return null;
     }
+  }
+  async markPublished(github, changes, sha) {
+    const affected = new Map(changes.filter(change => /^hub\/src\/data\/files\/[a-f0-9-]+\.json$/i.test(change.path)).map(change => [change.path, change]));
+    if (!affected.size) return;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const head = await github.head();
+      const metadata = new Map();
+      if (head === sha) {
+        // The exact committed envelope is authoritative only while main still
+        // points to this commit; a later replay must read the current tree.
+        for (const [path, change] of affected) metadata.set(path, change.action === 'delete' ? null : normalizeFileMetadata(JSON.parse(change.content)));
+      } else {
+        const entries = new Map((await github.tree(head)).filter(entry => entry.type === 'blob' && affected.has(entry.path)).map(entry => [entry.path, entry]));
+        for (const path of affected.keys()) {
+          const entry = entries.get(path);
+          if (!entry) { metadata.set(path, null); continue; }
+          if (entry.mode !== '100644' || entry.size > METADATA_BYTES) fail('FILE_POINTER_SYNC_FAILED', '当前附件元数据无法安全同步；已保留 GitHub 提交，请重试。', 409);
+          const blob = await github.blob(entry.sha);
+          if (blob.size > METADATA_BYTES) fail('FILE_POINTER_SYNC_FAILED', '当前附件元数据超过安全读取上限，请重试。', 409);
+          let file;
+          try { file = normalizeFileMetadata(JSON.parse(new TextDecoder().decode(fromBase64(blob.content)))); }
+          catch { fail('FILE_POINTER_SYNC_FAILED', '当前附件元数据无效；没有覆盖远程内容，请检查后重试。', 409); }
+          if (path !== `hub/src/data/files/${file.id}.json`) fail('FILE_POINTER_SYNC_FAILED', '当前附件路径和 ID 不一致，未修改链接指针。', 409);
+          metadata.set(path, file);
+        }
+      }
+      if (await github.head() !== head) continue;
+      // No network I/O inside this transaction. Preserve a concurrently
+      // completed replacement draft while synchronizing the published pointer.
+      await this.transaction(async store => {
+        for (const [path, file] of metadata) {
+          const id = path.slice('hub/src/data/files/'.length, -'.json'.length);
+          const record = await store.get(`file:${id}`);
+          if (!record) continue;
+          if (!file) record.current = null;
+          else {
+            const candidate = [record.pending, record.current].find(asset => this.matchesFile(asset, file)) || await this.historicAsset(store, file);
+            if (!candidate) fail('FILE_POINTER_SYNC_FAILED', '当前附件没有经过安全上传或导入，未回退链接指针。', 409);
+            record.current = { ...candidate, file, publicationSha: head };
+            if (this.matchesFile(record.pending, file)) record.pending = null;
+          }
+          await store.put(`file:${id}`, record);
+        }
+      });
+      return;
+    }
+    fail('FILE_POINTER_SYNC_CONFLICT', 'GitHub 提交已存在，但仓库仍在更新；请稍后重试链接同步，不会重复提交。', 409);
   }
   async publishedMetadata(id) {
     if (!UUID.test(id || '')) return null;
     const response = await this.service.fetcher(`https://raw.githubusercontent.com/${this.config.owner}/${this.config.repo}/${this.config.branch}/hub/src/data/files/${id}.json`, {
-      headers: { Accept: 'application/json', 'User-Agent': 'Z-hang-Homepage-Files' }, redirect: 'error' });
+      headers: { Accept: 'application/json', 'User-Agent': 'Z-hang-Homepage-Files' }, redirect: 'manual' });
     if (response.status === 404) return null;
-    if (!response.ok) fail('PUBLIC_METADATA_UNAVAILABLE', '暂时无法核验公开文件，请稍后重试。', 503);
+    // workerd supports follow/manual redirect modes. Reject every redirect
+    // explicitly so metadata can never leave this fixed public repository URL.
+    if (!response.ok) { await response.body?.cancel(); fail('PUBLIC_METADATA_UNAVAILABLE', '暂时无法核验公开文件，请稍后重试。', 503); }
     if (Number(response.headers.get('Content-Length')) > METADATA_BYTES) { await response.body?.cancel(); return null; }
     const reader = response.body?.getReader();
     if (!reader) return null;

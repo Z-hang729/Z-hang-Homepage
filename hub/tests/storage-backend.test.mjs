@@ -46,7 +46,9 @@ async function fixture(options = {}) {
     calls.push({ origin: url.origin, path: url.pathname, method: init.method || 'GET', auth: Boolean(init.headers?.Authorization) });
     if (url.hostname === 'raw.githubusercontent.com') {
       assert.equal(init.headers.Authorization, undefined);
+      assert.equal(init.redirect, 'manual');
       const path = url.pathname.split('/main/')[1];
+      if (options.redirectPublishedMetadata) return new Response(null, { status: 302, headers: { Location: 'https://untrusted.example/metadata.json' } });
       if (options.largePublishedMetadata) return new Response('x'.repeat(1024 * 1024 + 1));
       return source.has(path) ? new Response(source.get(path), { headers: { 'Content-Type': 'text/plain' } }) : new Response(null, { status: 404 });
     }
@@ -94,7 +96,7 @@ async function fixture(options = {}) {
     if (url.pathname.includes('/git/blobs/')) {
       const index = Number(url.pathname.split('/').at(-1)) - 1;
       const content = [...source.values()][index];
-      return Response.json({ content: toBase64(encoder.encode(content)), size: encoder.encode(content).byteLength, encoding: 'base64' });
+      return Response.json({ sha: url.pathname.split('/').at(-1), content: toBase64(encoder.encode(content)), size: encoder.encode(content).byteLength, encoding: 'base64' });
     }
     if (url.pathname === '/repos/Z-hang729/Z-hang-Homepage') return Response.json({ id: 43, owner: { id: ownerId }, full_name: 'Z-hang729/Z-hang-Homepage', size: 1, has_pages: true });
     if (url.pathname === '/graphql') {
@@ -129,16 +131,40 @@ async function fixture(options = {}) {
   const publish = async file => {
     const path = `hub/src/data/files/${file.id}.json`;
     const files = await (await rpc('snapshot')).json();
-    const response = await rpc('publish', { expectedHead: head, idempotencyKey: crypto.randomUUID(), changes: [
+    const envelope = { expectedHead: head, idempotencyKey: crypto.randomUUID(), changes: [
       { path, action: 'upsert', expectedSha: files.files.find(item => item.path === path)?.sha || null, encoding: 'utf8', content: JSON.stringify(file) },
-    ] });
+    ] };
+    const response = await rpc('publish', envelope);
     assert.equal(response.status, 200, await response.clone().text());
-    return response.json();
+    return { ...await response.json(), envelope };
   };
   return { service, store, config, bucket, source, assets, calls, rpc, start, upload, complete, publish,
     advance: ms => { now += ms; }, mutations: () => mutations, uploadRequests: () => uploadRequests };
 }
 const encoder = new TextEncoder();
+
+test('Concurrent upload preparation shares one Release, reserves capacity and keeps binary transfers parallel', async () => {
+  let unblock; const barrier = new Promise(resolve => { unblock = resolve; });
+  const f = await fixture({ uploadWait: barrier });
+  const records = await Promise.all([f.start({ name: 'one.dat' }), f.start({ name: 'two.dat' }), f.start({ name: 'three.dat' })]);
+  const uploads = await Promise.all(records.map(record => f.store.get(`upload:${record.sessionId}`)));
+  assert.equal(new Set(uploads.map(record => record.releaseId)).size, 1);
+  assert.equal(f.calls.filter(call => call.method === 'POST' && call.path.endsWith('/releases')).length, 1);
+  assert.equal((await f.store.get('storage:release:Z-hang-Homepage')).count, 3);
+  const transfers = records.map(record => f.upload(record));
+  for (let tick = 0; tick < 100 && f.uploadRequests() < 3; tick++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.uploadRequests(), 3, 'All transfers reach the provider before any is released');
+  unblock(); for (const response of await Promise.all(transfers)) assert.equal(response.status, 200);
+  assert.equal((await f.store.get('storage:release:Z-hang-Homepage')).count, 3, 'Completion does not count reserved slots twice');
+  const previous = await f.store.get('storage:release:Z-hang-Homepage'); previous.count = 950;
+  await f.store.put('storage:release:Z-hang-Homepage', previous);
+  const rotated = await Promise.all([f.start(), f.start(), f.start()]);
+  const next = await Promise.all(rotated.map(record => f.store.get(`upload:${record.sessionId}`)));
+  assert.equal(new Set(next.map(record => record.releaseId)).size, 1);
+  assert.notEqual(next[0].releaseId, uploads[0].releaseId);
+  assert.equal(f.calls.filter(call => call.method === 'POST' && call.path.endsWith('/releases')).length, 2);
+  assert.equal((await f.store.get('storage:release:Z-hang-Homepage')).count, 3);
+});
 
 test('Storage RPCs require the existing owner session, same-origin bridge and CSRF', async () => {
   const f = await fixture();
@@ -250,6 +276,16 @@ test('Public metadata supports valid documents above 64 KiB while retaining the 
   assert.equal((await f.service.fetch(new Request(file.previewUrl))).status, 200);
 });
 
+test('Public metadata redirects are rejected without requesting their destination', async () => {
+  const f = await fixture({ redirectPublishedMetadata: true });
+  const record = await f.start(); await f.upload(record); const file = await f.complete(record); await f.publish(file);
+  const response = await f.service.fetch(new Request(file.previewUrl));
+  assert.equal(response.status, 503);
+  assert.equal((await response.json()).error.code, 'PUBLIC_METADATA_UNAVAILABLE');
+  assert.equal(f.calls.some(call => call.origin === 'https://untrusted.example'), false);
+  assert.equal(f.calls.some(call => call.origin === 'https://github.com'), false);
+});
+
 test('Original Unicode filenames and relative paths are preserved, and provider SHA mismatch blocks completion', async () => {
   const f = await fixture();
   const name = 'e\u0301.science'; const path = `folder/${name}`;
@@ -310,6 +346,72 @@ test('Stable-ID replacement keeps published original until metadata commit and r
   assert.equal((await f.store.get(`file:${original.id}`)).current.file.storageKey, updated.storageKey);
   const result = await (await f.rpc('storage-delete', { id: original.id, storageKey: original.storageKey })).json();
   assert.equal(result.deleted, 1); assert.equal(f.assets.has(updated.githubAssetId), true);
+});
+
+test('Replaying an older delete or upload after a same-ID replacement preserves the newest published pointer', async () => {
+  const f = await fixture(); const first = await f.start(); await f.upload(first); const original = await f.complete(first);
+  const firstPublication = await f.publish(original);
+  const snapshot = await (await f.rpc('snapshot')).json(); const path = `hub/src/data/files/${original.id}.json`;
+  const deletion = { expectedHead: snapshot.head, idempotencyKey: crypto.randomUUID(), changes: [{ path, action: 'delete', expectedSha: snapshot.files.find(file => file.path === path).sha }] };
+  const removed = await f.rpc('publish', deletion); assert.equal(removed.status, 200, await removed.clone().text());
+  assert.equal((await f.store.get(`file:${original.id}`)).current, null);
+  const replacement = await f.start({ id: original.id, name: 'replacement.dat' }); await f.upload(replacement);
+  const latest = await f.complete(replacement); const latestPublication = await f.publish(latest);
+  for (const envelope of [deletion, firstPublication.envelope]) {
+    const replay = await f.rpc('publish', envelope); assert.equal(replay.status, 200, await replay.clone().text());
+    assert.equal((await replay.json()).replayed, true);
+    const stored = (await f.store.get(`file:${original.id}`)).current;
+    assert.equal(stored.file.storageKey, latest.storageKey); assert.equal(stored.file.originalName, 'replacement.dat');
+    assert.equal(stored.publicationSha, latestPublication.commit.sha);
+    assert.equal((await f.service.fetch(new Request(latest.previewUrl))).status, 200);
+  }
+  assert.equal(f.mutations(), 3, 'Replays must not create commits');
+});
+
+test('Replaying old metadata keeps later edits and cannot reactivate an asset after its latest deletion', async () => {
+  const f = await fixture(); const record = await f.start(); await f.upload(record); const file = await f.complete(record);
+  const first = await f.publish(file); const updated = { ...file, displayName: 'Latest scientific filename', description: 'Latest description' };
+  const latest = await f.publish(updated);
+  const replay = await f.rpc('publish', first.envelope); assert.equal(replay.status, 200, await replay.clone().text());
+  const stored = (await f.store.get(`file:${file.id}`)).current;
+  assert.equal(stored.file.displayName, updated.displayName); assert.equal(stored.file.description, updated.description);
+  assert.equal(stored.publicationSha, latest.commit.sha);
+  const snapshot = await (await f.rpc('snapshot')).json(); const path = `hub/src/data/files/${file.id}.json`;
+  const deletion = await f.rpc('publish', { expectedHead: snapshot.head, idempotencyKey: crypto.randomUUID(), changes: [{ path, action: 'delete', expectedSha: snapshot.files.find(item => item.path === path).sha }] });
+  assert.equal(deletion.status, 200);
+  assert.equal((await f.rpc('publish', first.envelope)).status, 200);
+  assert.equal((await f.store.get(`file:${file.id}`)).current, null);
+  assert.equal((await f.service.fetch(new Request(file.previewUrl))).status, 404);
+  assert.equal(f.mutations(), 3);
+});
+
+test('A following publication waits for the preceding durable pointer synchronization', async () => {
+  const f = await fixture(); const record = await f.start(); await f.upload(record); const file = await f.complete(record);
+  let release; const blocked = new Promise(resolve => { release = resolve; }); let entered = false;
+  const mark = f.service.files.markPublished.bind(f.service.files);
+  f.service.files.markPublished = async (...args) => { if (!entered) { entered = true; await blocked; } return mark(...args); };
+  const first = f.publish(file);
+  while (!entered) await new Promise(resolve => setImmediate(resolve));
+  const snapshot = await (await f.rpc('snapshot')).json(); const path = `hub/src/data/files/${file.id}.json`;
+  const second = f.rpc('publish', { expectedHead: snapshot.head, idempotencyKey: crypto.randomUUID(), changes: [{ path, action: 'upsert',
+    expectedSha: snapshot.files.find(item => item.path === path).sha, encoding: 'utf8', content: JSON.stringify({ ...file, displayName: 'Second publication' }) }] });
+  for (let tick = 0; tick < 5; tick++) await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.mutations(), 1, 'Second commit must wait for first pointer synchronization');
+  release(); await first; const result = await second; assert.equal(result.status, 200, await result.clone().text());
+  assert.equal((await f.store.get(`file:${file.id}`)).current.file.displayName, 'Second publication');
+  assert.equal(f.mutations(), 2);
+});
+
+test('Retry after pointer synchronization failure recovers the committed file without duplicate publishing', async () => {
+  const f = await fixture(); const record = await f.start(); await f.upload(record); const file = await f.complete(record);
+  const snapshot = await (await f.rpc('snapshot')).json();
+  const envelope = { expectedHead: snapshot.head, idempotencyKey: crypto.randomUUID(), changes: [{ path: `hub/src/data/files/${file.id}.json`, action: 'upsert', expectedSha: null, encoding: 'utf8', content: JSON.stringify(file) }] };
+  const mark = f.service.files.markPublished.bind(f.service.files); let failed = false;
+  f.service.files.markPublished = async (...args) => { if (!failed) { failed = true; throw Error('Fictional durable synchronization interruption'); } return mark(...args); };
+  assert.equal((await f.rpc('publish', envelope)).status, 500); assert.equal(f.mutations(), 1);
+  const retry = await f.rpc('publish', envelope); assert.equal(retry.status, 200, await retry.clone().text());
+  assert.equal((await retry.json()).replayed, true); assert.equal(f.mutations(), 1);
+  assert.equal((await f.service.fetch(new Request(file.previewUrl))).status, 200);
 });
 
 test('R2 direct multipart signs scoped part URLs, persists receipts, completes idempotently and never relays binary bytes', async () => {

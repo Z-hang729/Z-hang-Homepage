@@ -124,3 +124,29 @@ Cloudflare Worker `https://z-hang-owner-cms.zhang-owner-worker.workers.dev` 已�
 证据：`hub/.local/qa/storage-browser/results.json`、`hub/.local/qa/file-reader/results.json`、根目录 `.local/file-storage-v2-baseline.json` 和 `.local/backend-production-smoke.json`，均不进入公开仓库。
 
 本轮配置保持原单仓库 GitHub App 安装范围，默认使用网站仓库 Releases。Cloudflare R2 API 返回账户尚未开通，需要账户本人在控制台完成开通/账单确认；因此当前不能声称真实多 GB R2 上传已验证。GitHub Releases 的实际上传及清理闭环另行记录，不从隔离测试推断。
+
+## 文件存储升级：真实上传与公开读取（2026-10-05）
+
+初次实现提交 `5811390eff75474a75b8d61fe71df160a6dd8a2d` 已经 [Actions 37261555416](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37261555416) 和同 SHA 的 Pages deployment `6851054486` 成功发布。本轮始终保留用户最新首页与内容；18 个基线文件逐字节核对没有变化。
+
+- 在真实 Owner 页面并发上传两个各 12 MiB 的 `.dat` 测试原件和一个 163 字节文本原件。单文件超过旧 10 MiB 限制、总量超过旧 20 MiB 限制；三个文件均为专门生成的无敏感信息夹具，没有上传个人研究资料。
+- 上传后统一审阅发布，仅产生一个元数据 commit：`c12250ba0ef1da3c281407395869b33cd704ceb0`，父提交为 `5811390eff75474a75b8d61fe71df160a6dd8a2d`。该 commit 仅新增三个 JSON 记录，原件保存在 Releases，没有进入这次 Git commit。[Actions 37262198708](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37262198708) 和同 SHA 的 Pages deployment `6851149777` 均为 success。
+- 三个原件的本地 SHA256、元数据 SHA256、GitHub asset digest 和公开下载 SHA256 一致。稳定文件页面与原件下载均为 HTTP 200；公开 HEAD 保留原始文件名和大小，Range 返回 HTTP 206 与正确的 32 字节片段。
+- 实际网站的 12 项只读浏览器检查通过，覆盖文件库搜索、稳定文件页、文本预览、原件下载、当前首页与 About 头像、已有公式和图表、15 条当前页面的手机布局与访客无编辑控件。文本夹具显示正常；两个二进制 `.dat` 不属于可解码 UTF-8 文本，预览安全失败后下载仍可用，没有把它们计为科学数据预览成功。没有浏览器异常或失败 HTTP 请求。
+
+随后经相同 Owner 编辑器发布删除元数据，commit 为 `b9e2f9b6c02db8e53e0c5d89a4e685da067f8aac`，仅删除这三个测试 JSON；[Actions 37269153920](https://github.com/Z-hang729/Z-hang-Homepage/actions/runs/37269153920) 和同 SHA 的 Pages deployment `6852205382` 均为 success。再通过真实 File manager 执行受当前 HEAD 引用检查保护的原件清理。`2026-10-05T05:56:32.526Z` 的只读核验确认三个元数据与 GitHub Release 原件均不存在，三个公开页面和本站原件代理均返回 HTTP 404，清理结果 `passed: true`。清理后 18 个受保护文件再次核对一致。
+
+无凭据的真实证据在根目录 `.local/storage-production-proof.json` 和 `.local/qa/storage-public-smoke-files/results.json`；截图、夹具和验证工具均位于忽略目录，不进入公开网站源码。
+
+## 文件存储升级：后端修复与当前边界（2026-10-05）
+
+生产检查发现并修复公开元数据读取在真实 workerd 中的 redirect 兼容问题。后台发布指针更新通过串行发布与 SQLite 事务保护，安全重放以当前 HEAD 为准；并发上传开始阶段串行分配 Release 容器和预留资产位置，原件传输仍可并行。最新已部署 Worker version 为 `0f3aab00-95e9-4bc1-a712-bd2e08bb7e5a`，匿名生产安全门禁再次 10/10 通过。
+
+- 当前完整 Node 自动测试 163/163 通过，其中包含 12 项后端身份认证测试。新增回归包含发布/删除重放、并发 Release 分配和元数据重定向拒绝。最终 Astro 检查为 0 errors、0 warnings、10 hints；实际 Pages 路径构建 34 页，779 项本地链接、资源与锚点检查全部通过。
+- 编译后的真实 workerd + SQLite DO 完成 Owner 认证、无 GitHub token 的上传票据/CORS、12 MiB 流式传输、一次原子元数据发布，以及发布后的公开全量 SHA256、HEAD、Range 和重定向拒绝验证。此处使用虚构外部提供方响应，运行时兼容性结果与上面的真实 GitHub 账号实测分别记录。
+- 7 组上传/管理和 16 组阅读器隔离浏览器证据仍有效，见 `hub/.local/qa/storage-browser/results.json`、`hub/.local/qa/file-reader/results.json`。它们不证明真实 R2 已开通或多 GB 对象已上传。
+- 登录恢复现在与正常发布共用确认提交后的原件清理流程。新增 9 组隔离浏览器回归执行真实 Owner client、发布状态转换和 IndexedDB：已确认提交先保存回执再清理；未确认、认证过期和未知发布状态保留原请求并阻止清理；仍被引用或暂时删除失败的回执保留以供重试。所有分支内容保持一致、没有浏览器异常或远程写入，证据为 `hub/.local/qa/owner-recovery/results.json`。
+
+当前真实可用上传路径为 GitHub Releases 的安全流式转发，入口容量为 `100000000` 字节；GitHub 单 asset 的平台容量小于 2 GiB，不代表当前 Worker 入口可以接收这么大的请求。文件数量和整批累计容量没有旧的应用级限制。超过转发入口的文件需要已配置的对象存储直传。
+
+R2 账户查询实际返回 `10042: Please enable R2 through Cloudflare Dashboard`，尚未完成账户本人开通/账单确认。大文件预签名直传、multipart 和恢复代码已实现并经过模拟验证，但真实 R2 bucket、凭据和多 GB 上传未验证；生产仍保持原单仓库 GitHub App 授权范围，没有自动扩大授权或创建资产仓库。

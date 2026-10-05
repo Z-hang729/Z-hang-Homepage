@@ -19,10 +19,39 @@ export default { async fetch(request, env) {
 } };
 `;
 const assets = new Map();
+const source = new Map();
+let head = 'a'.repeat(40), publications = 0, publicRequests = 0, metadataRedirect = false;
 let uploadedBytes = 0, uploadRequests = 0;
 const outbound = async request => {
   const url = new URL(request.url);
   if (url.origin === 'https://github.com' && url.pathname === '/login/oauth/access_token') return Response.json({ access_token: token, expires_in: 28800 });
+  if (url.hostname === 'raw.githubusercontent.com') {
+    assert.equal(request.headers.get('Authorization'), null);
+    publicRequests++;
+    if (metadataRedirect) return new Response(null, { status: 302, headers: { Location: 'https://untrusted.example/metadata.json' } });
+    const content = source.get(url.pathname.split('/main/')[1]);
+    return content === undefined ? new Response(null, { status: 404 }) : new Response(content);
+  }
+  if (url.hostname === 'github.com' && url.pathname.includes('/releases/download/')) {
+    assert.equal(request.headers.get('Authorization'), null);
+    return new Response(null, { status: 302, headers: { Location: `https://release-assets.githubusercontent.com/fixture/${url.pathname.split('/').at(-1)}` } });
+  }
+  if (url.hostname === 'release-assets.githubusercontent.com') {
+    assert.equal(request.headers.get('Authorization'), null);
+    const asset = [...assets.values()].find(value => value.name === url.pathname.split('/').at(-1));
+    assert.ok(asset);
+    const range = request.headers.get('Range');
+    if (range) assert.equal(range, 'bytes=0-31');
+    const size = range ? 32 : asset.size;
+    let sent = 0;
+    const body = request.method === 'HEAD' ? null : new ReadableStream({ pull(controller) {
+      if (sent === size) return controller.close();
+      const chunk = new Uint8Array(Math.min(65536, size - sent)).fill(9);
+      sent += chunk.byteLength; controller.enqueue(chunk);
+    } });
+    return new Response(body, { status: range ? 206 : 200, headers: { 'Content-Length': String(size),
+      'Accept-Ranges': 'bytes', ...(range ? { 'Content-Range': `bytes 0-31/${asset.size}` } : {}) } });
+  }
   assert.equal(request.headers.get('Authorization'), `Bearer ${token}`);
   if (url.hostname === 'uploads.github.com') {
     uploadRequests++;
@@ -41,6 +70,23 @@ const outbound = async request => {
   if (url.pathname === '/user/installations/42/repositories') return Response.json({ total_count: 1, repositories: [{ id: 43, owner: { id: 326471613 }, full_name: 'Z-hang729/Z-hang-Homepage', permissions: { push: true } }] });
   if (url.pathname.endsWith('/releases') && request.method === 'POST') return Response.json({ id: 11 });
   if (url.pathname.endsWith('/releases/11/assets')) return Response.json([...assets.values()]);
+  if (url.pathname.endsWith('/git/ref/heads/main')) return Response.json({ object: { type: 'commit', sha: head } });
+  if (url.pathname.includes('/git/commits/')) return Response.json({ tree: { sha: head } });
+  if (url.pathname.includes('/git/trees/')) return Response.json({ tree: [...source.entries()].map(([path, content], index) => ({ path,
+    sha: String(index + 1).padStart(40, '0'), size: Buffer.byteLength(content), type: 'blob', mode: '100644' })) });
+  if (url.pathname.includes('/git/blobs/')) {
+    const content = [...source.values()][Number(url.pathname.split('/').at(-1)) - 1];
+    return Response.json({ sha: url.pathname.split('/').at(-1), content: Buffer.from(content).toString('base64'), size: Buffer.byteLength(content), encoding: 'base64' });
+  }
+  if (url.pathname === '/repos/Z-hang729/Z-hang-Homepage') return Response.json({ id: 43, owner: { id: 326471613 }, full_name: 'Z-hang729/Z-hang-Homepage', size: 1, has_pages: true });
+  if (url.pathname === '/graphql') {
+    const input = (await request.json()).variables.input;
+    assert.equal(input.expectedHeadOid, head);
+    for (const file of input.fileChanges.additions) source.set(file.path, Buffer.from(file.contents, 'base64').toString('utf8'));
+    for (const file of input.fileChanges.deletions) source.delete(file.path);
+    head = (++publications).toString(16).padStart(40, '0');
+    return Response.json({ data: { createCommitOnBranch: { commit: { oid: head, url: `https://github.com/Z-hang729/Z-hang-Homepage/commit/${head}` } } } });
+  }
   throw Error('Unexpected fictional storage route');
 };
 const mf = new Miniflare(convertV4MiniflareOptions({ workers: [{ name: 'owner-storage-runtime-test', modules: true, script,
@@ -82,5 +128,28 @@ try {
   assert.equal((await mf.dispatchFetch(file.previewUrl)).status, 404, 'Completed but unpublished files must not be public through the website proxy');
   const replay = await rpc('storage-complete', { sessionId: upload.sessionId }); assert.equal(replay.status, 200);
   assert.equal(uploadRequests, 1);
-  console.log('workerd + SQLite DO: real-runtime owner auth, token-free scoped CORS upload, 12 MiB streaming with upstream Content-Length, permanent metadata, and unpublished preview denial passed. Fictional provider fixtures only.');
+  const publication = await rpc('publish', { expectedHead: head, idempotencyKey: crypto.randomUUID(), changes: [{
+    path: `hub/src/data/files/${file.id}.json`, action: 'upsert', expectedSha: null, encoding: 'utf8', content: JSON.stringify(file),
+  }] });
+  assert.equal(publication.status, 200, await publication.clone().text());
+  assert.equal(publications, 1, 'Actual SQLite transaction must synchronize the published pointer after the atomic provider commit');
+  const downloaded = await mf.dispatchFetch(`${file.previewUrl}?download=1`);
+  assert.equal(downloaded.status, 200, await downloaded.clone().text());
+  assert.match(downloaded.headers.get('Content-Disposition'), /attachment.*runtime-large.fts/);
+  let downloadedBytes = 0; const downloadHash = createHash('sha256');
+  for await (const data of downloaded.body) { downloadedBytes += data.byteLength; downloadHash.update(data); }
+  assert.equal(downloadedBytes, length); assert.equal(downloadHash.digest('hex'), file.sha256);
+  const publicHead = await mf.dispatchFetch(`${file.previewUrl}?download=1`, { method: 'HEAD' });
+  assert.equal(publicHead.status, 200); assert.equal(publicHead.headers.get('Content-Length'), String(length));
+  assert.equal(await publicHead.text(), '');
+  const ranged = await mf.dispatchFetch(`${file.previewUrl}?download=1`, { headers: { Range: 'bytes=0-31', Origin: site } });
+  assert.equal(ranged.status, 206, await ranged.clone().text());
+  assert.equal(ranged.headers.get('Content-Range'), `bytes 0-31/${length}`);
+  assert.equal(ranged.headers.get('Access-Control-Allow-Origin'), site);
+  assert.equal((await ranged.arrayBuffer()).byteLength, 32);
+  metadataRedirect = true;
+  const redirected = await mf.dispatchFetch(file.previewUrl);
+  assert.equal(redirected.status, 503); assert.equal((await redirected.json()).error.code, 'PUBLIC_METADATA_UNAVAILABLE');
+  assert.equal(publicRequests, 4, 'Fixed metadata URL is requested exactly once per published proxy call and never follows redirect');
+  console.log('workerd + SQLite DO: owner auth, token-free upload CORS, 12 MiB streaming, atomic metadata publication, public HEAD/Range/full-download SHA256, and rejection of metadata redirects passed. Fictional provider fixtures only.');
 } finally { await mf.dispose(); }
