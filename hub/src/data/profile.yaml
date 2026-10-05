@@ -26,9 +26,9 @@ researchInterests:
   - Solar physics & Computer Science
 currently:
   - label: Researching
-    text: Space physics
+    text: Solar physics
   - label: Learning
-    text: Physics × computation
+    text: Physics × Computer
 education:
   - start: "2012"
     end: "2018"
