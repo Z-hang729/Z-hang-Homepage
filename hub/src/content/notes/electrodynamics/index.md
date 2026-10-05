@@ -8,7 +8,7 @@ tags:
   - Electromagnetism
   - Course Notes
 featured: true
-demo: true
+demo: false
 attachments:
   - title: Demonstration archive handout
     url: /documents/demo-handout.pdf
