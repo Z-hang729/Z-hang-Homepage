@@ -1,31 +1,29 @@
 name: Z-hang
 displayName: Z-hang
 uiLanguage: en
-supportedLanguages: [en, zh-CN]
+supportedLanguages:
+  - en
+  - zh-CN
 languageSwitcherEnabled: false
 tagline: Exploring the Sun, space, and computation.
 heroFirstLine: Between the
 heroSecondLine: Sun & the code.
 university: Peking University
 affiliation: 北京大学 · Peking University
-role: Undergraduate student · Class of 2024
+role: Undergraduate student · 2024
 degree: Space Physics
 secondDegree: Computer Science and Technology
 secondDegreeShort: Computer Science
-bio: >-
-  I am an undergraduate at Peking University, studying space physics
-  and computer science. This is my evolving home for research,
-  course notes, and things I build along the way.
-bioZh: 我是北京大学 2024 级本科生，主修空间物理，双学位学习计算机科学与技术。在这里记录研究、整理课程笔记
-email: "hang.zhai.729@gmail.com"
+bio: I am an undergraduate at Peking University, studying space physics and computer science.
+bioZh: ""
+email: z.hang06.729@gmail.com
 github: https://github.com/Z-hang729
-avatar: ""
-location: "Beijing"
+avatar: /uploads/images/21bff32c-8bc4-4c82-a969-822923e3ab9a/bizhi.jpg
+location: Beijing
 cvPdf: ""
-lastUpdated: '2026-10-02'
+lastUpdated: 2026-10-05
 researchInterests:
-  - Solar physics
-  - Computer Science
+  - Solar physics&Computer Science
 currently:
   - label: Researching
     text: Space physics
@@ -34,19 +32,19 @@ currently:
   - label: Building
     text: An open academic garden
 education:
-  - start: '2024'
+  - start: "2024"
     end: Present
     institution: Peking University
     description: Undergraduate · Space Physics
-  - start: '2024 cohort'
+  - start: 2024 cohort
     end: Present
     institution: Peking University
     description: Second degree · Computer Science and Technology
 timeline:
-  - date: '2024'
+  - date: "2024"
     title: Entered Peking University
     description: Began undergraduate studies.
-  - date: '2026'
+  - date: "2026"
     title: A home for ideas in progress
     description: This academic hub brings research, notes, and projects together.
 skills: []
