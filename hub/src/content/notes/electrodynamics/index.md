@@ -9,10 +9,7 @@ tags:
   - Course Notes
 featured: true
 demo: false
-attachments:
-  - title: Demonstration archive handout
-    url: /documents/demo-handout.pdf
-    type: pdf
+attachments: []
 references: []
 category: Physics
 semester: 2026 Spring
