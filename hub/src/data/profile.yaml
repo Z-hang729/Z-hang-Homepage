@@ -52,11 +52,8 @@ education:
     description: Second degree · Computer Science and Technology
 timeline:
   - date: "2024"
-    title: Entered Peking University
+    title: Peking University
     description: Began undergraduate studies.
-  - date: "2026"
-    title: A home for ideas in progress
-    description: This academic hub brings research, notes, and projects together.
 skills: []
 tools: []
 links: []
