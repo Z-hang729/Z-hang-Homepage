@@ -28,7 +28,10 @@ const common = {
   github: safeURL.optional(), paper: safeURL.optional(), data: safeURL.optional(),
   links: z.array(z.object({ title: z.string().min(1), url: safeURL })).default([]),
   attachments: z.array(attachment).default([]), references: z.array(reference).default([]),
-  documents: z.array(z.object({ title: z.string().min(1), path: z.string().min(1), url: safeURL })).default([]),
+  documents: z.array(z.object({ title: z.string().min(1), path: z.string().min(1), url: safeURL, order:z.number().int().nonnegative().optional() })).default([]),
+  relations:z.array(z.object({target:z.string().min(1),type:z.enum(['related','references','uses','derivedFrom','attachment']).default('related')})).default([]),
+  relatedNotes:z.array(z.string()).default([]),relatedResearch:z.array(z.string()).default([]),
+  relatedProjects:z.array(z.string()).default([]),relatedFiles:z.array(z.string()).default([]),
 };
 const collectionLoader = (name: string) => glob({ pattern: '*/index.{md,mdx}', base: `./src/content/${name}`, generateId: ({ entry }) => entry.replace(/\/index\.(md|mdx)$/, '') });
 const orderedDates = (value: { date: Date; updated: Date }, ctx: RefinementCtx) => {
@@ -54,6 +57,11 @@ const logs = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: '
   title: z.string().min(1), project: z.string().regex(/^[\p{L}\p{N}_-]+$/u), date,
   tags: z.array(z.string()).default([]), demo: z.boolean().default(false), description: z.string().optional(),
   attachments: z.array(attachment).default([]),
+  updated:date.optional(),summary:z.string().optional(),
+  status:z.enum(['Planning','In Progress','Completed','Paused']).optional(),
+  kind:z.enum(['note','experiment','result']).optional(),
+  relatedNotes:z.array(z.string()).default([]),relatedProjects:z.array(z.string()).default([]),relatedFiles:z.array(z.string()).default([]),
+  relations:z.array(z.object({target:z.string().min(1),type:z.enum(['related','references','uses','derivedFrom','attachment']).default('related')})).default([]),
 }) });
 const publications = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/publications' }), schema: z.object({
   title: z.string().min(1), type: z.enum(['Paper', 'Conference', 'Poster', 'Talk', 'Software', 'Dataset']),

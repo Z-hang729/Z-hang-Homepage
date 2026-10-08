@@ -293,3 +293,9 @@ helper 会先检查、测试与构建，显示远端、分支与变更范围；�
 源码、`package-lock.json`、公开附件和导入清单都纳入 Git；`dist/`、`node_modules/`、临时文件不备份进源码仓库。未公开的原始数据和历史本地数据库单独备份，在原研究目录保留原文件名、版本与来源。
 
 长期维护操作见 [MAINTENANCE.md](docs/MAINTENANCE.md)，常见故障见 [TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)，技术架构和设计系统见 [ARCHITECTURE.md](docs/ARCHITECTURE.md)。
+
+## Research / Notes / Knowledge Connections（Phase 3）
+
+Research 日志现有独立阅读页、筛选和稳定引用；Notes 支持课程章节、阅读顺序、数学标签引用及从 Library 显式导入 Markdown。Owner 的 Add 菜单和搜索窗口提供 New Research Log、New Notes Chapter、Link Existing File、Add Relation。保存到草稿后统一发布；正式页面和搜索索引等待 Pages 构建完成。
+
+本次不要求重写旧内容，旧地址和原件保留。说明和维护入口：[Phase 3 变更记录](docs/PHASE3-CHANGELOG.md)、[初始审计](docs/PHASE3-AUDIT.md)、[Research](docs/RESEARCH-NOTEBOOK.md)、[Notes](docs/DIGITAL-NOTES.md)、[关联](docs/KNOWLEDGE-CONNECTIONS.md)、[测试](docs/PHASE3-TESTING.md)。

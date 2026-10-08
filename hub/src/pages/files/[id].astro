@@ -1,5 +1,6 @@
 ---
 import BaseLayout from '../../layouts/BaseLayout.astro';
+import KnowledgeConnections from '../../components/KnowledgeConnections.astro';
 import {getFiles} from '../../lib/file-records';
 import {allEntries} from '../../lib/content';
 import {formatFileSize,stableFilePath,originalDownloadURL,fileRelations,fileGroup} from '../../lib/files.mjs';
@@ -26,6 +27,7 @@ const scientific=[['Dataset type',file.datasetType],['Instrument',file.instrumen
   {scientific.length>0&&<section class="file-information" aria-labelledby="file-scientific-heading"><h2 id="file-scientific-heading">Scientific metadata</h2><dl class="file-metadata">{scientific.map(([label,input])=><><dt>{label}</dt><dd>{value(input)}</dd></>)}</dl></section>}
   {file.citation&&<section class="file-information" aria-labelledby="file-citation-heading"><h2 id="file-citation-heading">Citation</h2><pre class="file-citation">{file.citation}</pre><button type="button" class="button-secondary" data-file-copy-text={file.citation}>Copy citation</button></section>}
   {file.versions?.length>0&&<details class="file-history"><summary>Version history</summary><p>Previous file versions are recorded in the metadata history.</p><ul>{file.versions.map((version:any)=><li>{version.originalName||version.name||file.originalName} {version.size!==undefined&&`· ${formatFileSize(version.size)}`} {(version.replacedAt||version.updatedAt)&&`· ${formatDate(version.replacedAt||version.updatedAt)}`}</li>)}</ul></details>}
+  {file.visibility==='public'&&<KnowledgeConnections id={`file:${file.id}`}/>}
  </div>
 </BaseLayout>
 <script>import '../../file-preview/preview.js';import '../../file-preview/library.js';</script>

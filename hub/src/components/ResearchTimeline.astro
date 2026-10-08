@@ -1,0 +1,62 @@
+---
+import { render } from 'astro:content';
+import { dateLabel } from '../lib/content';
+import { url } from '../lib/site';
+import { getFiles } from '../lib/file-records';
+import { stableFilePath } from '../lib/files.mjs';
+import { researchLogData, researchProgress, sortResearchLogs, logPath, logAnchor, logRepositoryPath } from '../lib/research.mjs';
+interface Props { project: any; logs: any[]; }
+const {project,logs=[]}=Astro.props;
+const ordered=sortResearchLogs(logs), progress=researchProgress(project,logs);
+const rendered=await Promise.all(ordered.map(async log=>({log,data:researchLogData(log),...(await render(log))})));
+const tags=[...new Set(rendered.flatMap(item=>item.data.tags))].sort(), statuses=[...new Set(rendered.map(item=>item.data.status).filter(Boolean))];
+const files=getFiles({includeUnlisted:true});
+---
+<section class="article-section research-notebook" id="research-log" data-research-timeline>
+ <h2>Research progress timeline</h2>
+ <dl class="research-progress" aria-label="Research progress summary">
+  {progress.status&&<div><dt>Current status</dt><dd>{progress.status}</dd></div>}
+  {progress.updated&&<div><dt>Last updated</dt><dd><time datetime={progress.updated}>{dateLabel(progress.updated)}</time></dd></div>}
+  <div><dt>Research logs</dt><dd>{progress.totalLogs}{progress.exampleLogs>0&&<small> · {progress.exampleLogs} examples</small>}</dd></div>
+ </dl>
+ {(progress.recentExperiments.length>0||progress.latestResult)&&<div class="research-highlights">
+  {progress.recentExperiments.length>0&&<p><strong>Recent experiments: </strong>{progress.recentExperiments.map((log,index)=><>{index>0?' · ':''}<a href={url(logPath(log))}>{log.data.title}</a></>)}</p>}
+  {progress.latestResult&&<p><strong>Latest result: </strong><a href={url(logPath(progress.latestResult))}>{progress.latestResult.data.title}</a></p>}
+ </div>}
+ {logs.length>0?<>
+  <div class="research-log-controls" data-pagefind-ignore>
+   <label>Tag<select data-research-tag data-log-tag-filter><option value="">All tags</option>{tags.map(tag=><option value={tag}>{tag}</option>)}</select></label>
+   <label>Status<select data-research-status data-log-status-filter><option value="">All statuses</option>{statuses.map(status=><option value={status}>{status}</option>)}</select></label>
+   <button type="button" data-research-expand>Expand all</button><button type="button" data-research-collapse>Collapse all</button>
+  </div>
+  <p class="research-filter-status" data-research-count role="status" aria-live="polite" data-pagefind-ignore>{logs.length} logs</p>
+  <ol class="research-timeline">
+   {rendered.map(({log,data,Content},index)=><li id={logAnchor(log)} data-log-id={data.id} data-research-log data-log-tags={JSON.stringify(data.tags)} data-log-status={data.status} data-owner-log-path={logRepositoryPath(log)}>
+    {rendered.findIndex(item=>item.data.date===data.date)===index&&<span class="legacy-log-anchor" id={`log-${data.date}`} aria-hidden="true"/>}
+    <time class="research-log-date" datetime={data.date}>{dateLabel(data.date)}</time>
+    <details open={index===0}>
+     <summary><span class="research-log-title">{data.title}{data.demo&&<small class="research-demo">Example</small>}</span><span class="research-log-meta">{data.status&&<span>{data.status}</span>}<span>{data.kind}</span>{data.updated!==data.date&&<span>Updated {dateLabel(data.updated)}</span>}</span></summary>
+     {data.summary&&<p class="research-log-summary">{data.summary}</p>}
+     <div class="prose research-log-body"><Content/></div>
+     {data.tags.length>0&&<p class="research-log-tags">{data.tags.map(tag=><span>{tag}</span>)}</p>}
+     {(data.relatedFiles.length>0||data.attachments.length>0)&&<ul class="research-log-files">{data.relatedFiles.map(id=>{const file=files.find(item=>item.id===id);return file&&<li><a href={url(stableFilePath(id))}>{file.displayName}</a></li>;})}{data.attachments.map(file=><li><a href={url(file.url)}>{file.title}</a></li>)}</ul>}
+     <a class="research-log-full" href={url(logPath(log))}>Read full log →</a>
+    </details>
+   </li>)}
+  </ol>
+  <p data-research-empty hidden>No logs match these filters.</p>
+ </>:<p class="research-empty">No research logs yet.</p>}
+</section>
+<script>
+ for(const root of document.querySelectorAll<HTMLElement>('[data-research-timeline]')){
+  const rows=[...root.querySelectorAll<HTMLElement>('[data-research-log]')],tag=root.querySelector<HTMLSelectElement>('[data-research-tag]'),status=root.querySelector<HTMLSelectElement>('[data-research-status]');
+  const filter=()=>{let count=0;for(const row of rows){const visible=(!tag?.value||JSON.parse(row.dataset.logTags||'[]').includes(tag.value))&&(!status?.value||row.dataset.logStatus===status.value);row.hidden=!visible;if(visible)count++;}const label=root.querySelector('[data-research-count]');if(label)label.textContent=`${count} ${count===1?'log':'logs'}`;const empty=root.querySelector<HTMLElement>('[data-research-empty]');if(empty)empty.hidden=count>0;};
+  tag?.addEventListener('change',filter);status?.addEventListener('change',filter);
+  for(const [selector,open] of [['[data-research-expand]',true],['[data-research-collapse]',false]] as const)root.querySelector(selector)?.addEventListener('click',()=>rows.filter(row=>!row.hidden).forEach(row=>{const details=row.querySelector('details');if(details)details.open=open;}));
+  if(location.hash){const target=document.getElementById(decodeURIComponent(location.hash.slice(1))),row=target?.closest('[data-research-log]');const details=row?.querySelector('details');if(details)details.open=true;}
+ }
+</script>
+<style>
+ .legacy-log-anchor{position:absolute;scroll-margin-top:7rem}
+ .research-notebook{margin-top:3rem}.research-progress{display:flex;flex-wrap:wrap;gap:1rem 2.5rem;padding:1rem 0;border-block:1px solid var(--line);margin:1rem 0}.research-progress dt{font-size:.7rem;color:var(--muted);margin-bottom:.35rem}.research-progress dd{margin:0;font-size:.9rem}.research-progress small{font-size:.7rem;color:var(--muted)}.research-highlights{font-size:.85rem;line-height:1.6}.research-log-controls{display:flex;flex-wrap:wrap;gap:.6rem;align-items:end;margin-top:1.5rem}.research-log-controls label{display:grid;gap:.25rem;font-size:.7rem;color:var(--muted)}.research-log-controls select,.research-log-controls button{border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink);font:inherit;padding:.45rem .65rem;max-width:100%}.research-log-controls button{font-size:.75rem;cursor:pointer}.research-filter-status{font-size:.75rem;color:var(--muted)}.research-timeline{list-style:none;padding:0}.research-timeline>li{display:grid;grid-template-columns:100px minmax(0,1fr);gap:1.25rem;padding:1.25rem 0;border-top:1px solid var(--line);scroll-margin-top:7rem}.research-timeline>li[hidden]{display:none}.research-log-date{font-size:.75rem;color:var(--muted);padding-top:.25rem}.research-timeline details{min-width:0}.research-timeline summary{cursor:pointer;overflow-wrap:anywhere}.research-log-title{font-size:1rem;font-weight:600}.research-demo{margin-left:.6rem;font-size:.65rem;color:var(--muted);font-weight:400}.research-log-meta{display:flex;flex-wrap:wrap;gap:.4rem .8rem;margin-top:.5rem;color:var(--muted);font-size:.7rem}.research-log-summary{font-size:.9rem;line-height:1.6}.research-log-body{font-size:.9rem}.research-log-body :global(h1){font-size:1.4rem}.research-log-body :global(h2){font-size:1.2rem}.research-log-tags{display:flex;flex-wrap:wrap;gap:.4rem}.research-log-tags span{font-size:.65rem;color:var(--muted);border:1px solid var(--line);border-radius:4px;padding:.15rem .4rem}.research-log-files{font-size:.82rem;line-height:1.8;overflow-wrap:anywhere}.research-log-full{display:inline-block;margin-top:.75rem;font-size:.8rem}.research-empty{color:var(--muted);font-size:.9rem}@media(max-width:600px){.research-timeline>li{grid-template-columns:minmax(0,1fr);gap:.5rem}.research-progress{gap:1rem 1.5rem}.research-log-controls label{flex:1;min-width:100px}}
+</style>

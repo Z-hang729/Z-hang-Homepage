@@ -23,7 +23,7 @@ export async function allEntries(): Promise<HubEntry[]> {
 }
 export function escapeXML(value: string): string { return value.replace(/[<>&"']/g, (character) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&apos;' }[character]!)); }
 
-type DocumentModule = { default: any; frontmatter: Record<string, any>; getHeadings: () => Heading[] };
+type DocumentModule = { default: any; frontmatter: Record<string, any>; getHeadings: () => Heading[];rawContent?:()=>string };
 const documents = import.meta.glob<DocumentModule>('/src/content/{research,notes,projects}/**/files/**/*.{md,mdx}', { eager: true });
 export function getDocuments(kind: ContentKind) {
   return Object.entries(documents).filter(([path]) => path.startsWith(`/src/content/${kind}/`)).map(([path, module]) => {

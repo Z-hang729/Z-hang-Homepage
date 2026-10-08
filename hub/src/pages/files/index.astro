@@ -10,7 +10,7 @@ const stats=[['Files',files.length],['Documents',files.filter(file=>['documents'
 ---
 <BaseLayout title="Z-hang’s Library" description="Research files, course materials, code and scientific data. Browse previews and download the original files.">
  <div class="container section library-page" data-file-library data-library-view="grid">
-  <header class="library-header"><p class="eyebrow">THE ACADEMIC FILE LIBRARY</p><h1>Z-hang’s Library<span>.</span></h1><p class="section-description">Research files, course materials, code and data — with their context, previews and original downloads.</p></header>
+  <header class="library-header"><p class="eyebrow">THE ACADEMIC FILE LIBRARY</p><h1>Z-hang’s Library</h1><p class="section-description">Research files, course materials, code and data — with their context, previews and original downloads.</p></header>
   <dl class="library-stats" aria-label="Library statistics">{stats.map(([label,value])=><div><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
   <div class="library-controls" data-pagefind-ignore>
    <label class="file-search"><span>Search files</span><input type="search" data-file-search placeholder="Filename, course, research, tag or folder…" autocomplete="off" aria-controls="file-resources"/></label>

@@ -4,6 +4,7 @@ import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import { CONTENT_KINDS, DEFAULT_HOMEPAGE, assertAllowedPath, assertSlug, safeRelativePath, parseFrontmatter, parseYAML, validateMetadata, validateData, validateMarkdownBody, validateAsset, validateChangeSet, snapshotIndex, ownerError, utf8Bytes, decodeBase64, OWNER_LIMITS, assertSafeURL } from './policy.mjs';
 import { fileRelations,withFileRelations } from '../files.mjs';
+import { RESEARCH_LOG_STATUSES, RESEARCH_LOG_KINDS } from '../research.mjs';
 
 const parser = unified().use(remarkParse).use(remarkMath);
 const prefix = 'hub/src/content/';
@@ -28,8 +29,8 @@ export function generateSlug(title) {
   let hash = 2166136261; for (const char of String(title)) hash = Math.imul(hash ^ char.codePointAt(0), 16777619);
   return `entry-${(hash >>> 0).toString(36)}`;
 }
-export function serializeContentDocument({ metadata, body = '' }) {
-  return `---\n${YAML.stringify(metadata, { lineWidth: 0 })}---\n${body.startsWith('\n') ? '' : '\n'}${body}`;
+export function serializeContentDocument({ metadata, body = '', preserveBody = false }) {
+  return `---\n${YAML.stringify(metadata, { lineWidth: 0 })}---\n${preserveBody || body.startsWith('\n') ? '' : '\n'}${body}`;
 }
 function protectCodeAndMath(body) {
   const ranges = []; const visit = node => { if (['code', 'inlineCode', 'math', 'inlineMath'].includes(node.type)) ranges.push([node.position.start.offset, node.position.end.offset]); else for (const child of node.children || []) visit(child); }; visit(parser.parse(body));
@@ -90,8 +91,8 @@ export function readOwnerModel(snapshot) {
   const entries = { research: [], notes: [], projects: [] }, logs = [], assets = [], documents = [];
   for (const file of files.values()) {
     if (/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/index\.mdx?$/.test(file.path)) { const entry = parseContentFile(file); entries[entry.kind].push(entry); }
-    else if (/^hub\/src\/content\/logs\/.+\.md$/.test(file.path)) logs.push(parseContentFile(file));
-    else if (/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/files\/.+\.md$/.test(file.path)) documents.push(parseContentFile(file));
+    else if (/^hub\/src\/content\/logs\/.+\.mdx?$/.test(file.path)) logs.push(parseContentFile(file));
+    else if (/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/files\/.+\.mdx?$/.test(file.path)) documents.push(parseContentFile(file));
     else if (file.path.startsWith('hub/public/uploads/')) assets.push({ ...file, url: assetURL(file.path) });
   }
   for (const list of Object.values(entries)) list.sort((a,b) => (a.metadata.order ?? 0) - (b.metadata.order ?? 0) || b.metadata.date.localeCompare(a.metadata.date));
@@ -122,7 +123,7 @@ export function updateEntryChanges(snapshot, {kind,slug,metadata={},body,section
   assertSlug(slug); const file=entryFile(snapshot,kind,slug); if(!file) throw ownerError('This article is missing. Reload the content snapshot.');
   const parsed=parseContentFile(file),data=metadataFor(kind,metadata,parsed.metadata); data.tags=normalizeTags(data.tags,knownTagsOf(snapshot)); if(data.slug!==undefined && data.slug!==slug) throw ownerError('Changing a title keeps its URL. Slug changes require an explicit migration through the developer workflow.');
   if(sections!==undefined) body=joinSections(sections,preamble ?? parsed.preamble);
-  if(body===undefined || body===parsed.body) return [changeFor(snapshot,file.path,serializeContentDocument({metadata:data,body:parsed.body}))];
+  if(body===undefined || body===parsed.body) return [changeFor(snapshot,file.path,serializeContentDocument({metadata:data,body:parsed.body,preserveBody:true}))];
   if(typeof body!=='string') throw ownerError('Article body must be Markdown text.');
   if(parsed.format==='mdx') {
     if(parsed.conversionError) throw ownerError(parsed.conversionError);
@@ -145,32 +146,92 @@ export function deleteEntryChanges(snapshot,{kind,slug,confirmation}) {
 }
 export function createLogChanges(snapshot,{project,metadata={},body='',slug}) {
   assertSlug(project); if(!entryFile(snapshot,'research',project)) throw ownerError('Choose an existing research project.');
-  const data={title:'',date:new Date().toISOString().slice(0,10),tags:[],demo:false,...metadata,project}; data.tags=normalizeTags(data.tags); validateMetadata(data,{log:true}); validateMarkdownBody(body);
-  slug=assertSlug(slug || `${data.date}-${generateSlug(data.title)}`); const path=`${prefix}logs/${project}/${slug}.md`; if(filesOf(snapshot).has(path)) throw ownerError('An update with this date/title slug already exists.','DUPLICATE_SLUG');
+  const data=researchLogMetadata({title:'',date:new Date().toISOString().slice(0,10),tags:[],demo:false,...metadata},project); validateMarkdownBody(body);
+  slug=assertSlug(slug || `${data.date}-${generateSlug(data.title)}`); const path=`${prefix}logs/${project}/${slug}.md`; if(filesOf(snapshot).has(path)||filesOf(snapshot).has(path+'x')) throw ownerError('An update with this date/title slug already exists.','DUPLICATE_SLUG');
   return [changeFor(snapshot,path,serializeContentDocument({metadata:data,body}))];
 }
+function researchLogMetadata(metadata,project) {
+  if(metadata.project&&metadata.project!==project||metadata.projectId&&metadata.projectId!==project)throw ownerError('A research log keeps its existing project.');
+  const data={...metadata,project,updated:metadata.updated||metadata.date,summary:metadata.summary??metadata.description??'',kind:metadata.kind||'note'};
+  data.tags=normalizeTags(data.tags||[]);
+  if(data.status==='')delete data.status;
+  if(data.status&&!RESEARCH_LOG_STATUSES.includes(data.status))throw ownerError('Choose a valid research log status.');
+  if(!RESEARCH_LOG_KINDS.includes(data.kind))throw ownerError('Choose note, experiment or result.');
+  if(typeof data.summary!=='string')throw ownerError('The research log summary must be text.');
+  for(const key of ['relatedFiles','relatedNotes','relatedProjects']){
+    if(data[key]===undefined)continue;
+    if(!Array.isArray(data[key])||data[key].some(value=>typeof value!=='string'||!value.trim()))throw ownerError(`${key} needs a list of stable references.`);
+    data[key]=[...new Set(data[key].map(value=>value.trim()))];
+  }
+  validateMetadata(data,{log:true});return data;
+}
 export function updateLogChanges(snapshot,{path,metadata={},body}) {
-  if(!path.startsWith(`${prefix}logs/`)) throw ownerError('Choose a research log.'); const file=filesOf(snapshot).get(path); if(!file) throw ownerError('The log is missing.'); const parsed=parseContentFile(file),data={...parsed.metadata,...metadata}; data.tags=normalizeTags(data.tags); validateMetadata(data,{log:true}); body ??= parsed.body; validateMarkdownBody(body); return [changeFor(snapshot,path,serializeContentDocument({metadata:data,body}))];
+  const identity=path.match(/^hub\/src\/content\/logs\/([^/]+)\/([^/]+)\.mdx?$/);
+  if(!identity) throw ownerError('Choose a research log.'); const file=filesOf(snapshot).get(path); if(!file) throw ownerError('The log is missing.');
+  const parsed=parseContentFile(file),data=researchLogMetadata({...parsed.metadata,...metadata},identity[1]);body ??=parsed.body;
+  if(parsed.format==='mdx'){if(body!==parsed.body)throw ownerError('Existing MDX log bodies use the developer workflow. Their metadata can be edited here.');}
+  else validateMarkdownBody(body);
+  return [changeFor(snapshot,path,serializeContentDocument({metadata:data,body,preserveBody:true}))];
+}
+export function deleteLogChanges(snapshot,{path,confirmation}) {
+  if(!/^hub\/src\/content\/logs\/[^/]+\/[^/]+\.mdx?$/.test(path))throw ownerError('Choose a research log.');
+  const file=filesOf(snapshot).get(path);if(!file)throw ownerError('The log is missing.');
+  if(confirmation!==parseContentFile(file).metadata.title)throw ownerError('Enter the exact research log title before deleting it.','DELETE_CONFIRMATION');
+  // A log contains references; removing it never deletes shared Library originals.
+  return [deleteFor(snapshot,path)];
 }
 function documentIdentity(path) {
-  const match=path.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/files\/(.+\.md)$/);
+  const match=path.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/files\/(.+\.mdx?)$/);
   if(!match)throw ownerError('Choose a Markdown reading document inside an existing course, research or project.');
-  return {kind:match[1],slug:match[2],relative:match[3],url:`/${match[1]}/${match[2]}/files/${encodePath(match[3].replace(/\.md$/,''))}/`};
+  return {kind:match[1],slug:match[2],relative:match[3],url:`/${match[1]}/${match[2]}/files/${encodePath(match[3].replace(/\.mdx?$/,''))}/`};
 }
-export function createDocumentChanges(snapshot,{kind,slug,path,metadata={},body=''}) {
+function documentSource(metadata,body) { return `---\n${YAML.stringify(metadata,{lineWidth:0})}---\n${body}`; }
+export function createDocumentChanges(snapshot,{kind,slug,path,metadata={},body='',archiveOriginal=true}) {
   if(!CONTENT_KINDS.includes(kind))throw ownerError('Choose a content collection.');assertSlug(slug);safeRelativePath(path);if(!path.endsWith('.md'))throw ownerError('A new reading note uses a .md filename.');
   const parent=entryFile(snapshot,kind,slug);if(!parent)throw ownerError('Create the course or article before adding a reading note.');
-  const repoPath=`${prefix}${kind}/${slug}/files/${path}`,identity=documentIdentity(repoPath),files=filesOf(snapshot);if(files.has(repoPath))throw ownerError('A reading note already uses this filename.','DUPLICATE_SLUG');
-  const originalPath=`hub/public/uploads/${kind}/${slug}/${path}`;if(files.has(originalPath))throw ownerError('An uploaded original already uses this filename. Choose another name to preserve it.','DUPLICATE_SLUG');
-  const parsed=parseContentFile(parent),data={title:'',description:`Reading note in ${parsed.metadata.title}`,date:parsed.metadata.date,updated:parsed.metadata.updated,tags:parsed.metadata.tags||[],demo:parsed.metadata.demo||false,...metadata};data.tags=normalizeTags(data.tags,knownTagsOf(snapshot));validateMetadata(data,{document:true});validateMarkdownBody(body);
-  const content=serializeContentDocument({metadata:data,body}),parentMetadata={...parsed.metadata,documents:[...(parsed.metadata.documents||[]),{title:data.title,path,url:identity.url}],attachments:[...(parsed.metadata.attachments||[]),{title:path,url:identity.url,type:'markdown'}]};
-  return [changeFor(snapshot,repoPath,content),changeFor(snapshot,originalPath,content),...updateEntryChanges(snapshot,{kind,slug,metadata:parentMetadata})];
+  const repoPath=`${prefix}${kind}/${slug}/files/${path}`,identity=documentIdentity(repoPath),files=filesOf(snapshot);if(files.has(repoPath)||files.has(repoPath+'x'))throw ownerError('A reading note already uses this filename or URL.','DUPLICATE_SLUG');
+  const originalPath=`hub/public/uploads/${kind}/${slug}/${path}`;if(archiveOriginal&&files.has(originalPath))throw ownerError('An uploaded original already uses this filename. Choose another name to preserve it.','DUPLICATE_SLUG');
+  const parsed=parseContentFile(parent),existing=[...files.keys()].filter(item=>item.startsWith(`${prefix}${kind}/${slug}/files/`)&&/\.mdx?$/.test(item));
+  const data={title:'',description:`Reading note in ${parsed.metadata.title}`,date:parsed.metadata.date,updated:parsed.metadata.updated,tags:parsed.metadata.tags||[],demo:parsed.metadata.demo||false,order:Math.max(existing.length-1,...existing.map(item=>parseContentFile(files.get(item)).metadata.order??-1))+1,...metadata};data.tags=normalizeTags(data.tags,knownTagsOf(snapshot));validateMetadata(data,{document:true});validateMarkdownBody(body);
+  const content=serializeContentDocument({metadata:data,body}),parentMetadata={...parsed.metadata,documents:[...(parsed.metadata.documents||[]),{title:data.title,path,url:identity.url,order:data.order}],attachments:[...(parsed.metadata.attachments||[]),{title:path,url:identity.url,type:'markdown'}]};
+  return [changeFor(snapshot,repoPath,content),...(archiveOriginal?[changeFor(snapshot,originalPath,content)]:[]),...updateEntryChanges(snapshot,{kind,slug,metadata:parentMetadata})];
 }
 export function updateDocumentChanges(snapshot,{path,metadata={},body}) {
-  const identity=documentIdentity(path),file=filesOf(snapshot).get(path);if(!file)throw ownerError('The reading note is missing. Reload the content snapshot.');const parsed=parseContentFile(file),data={...parsed.metadata,...metadata};data.tags=normalizeTags(data.tags,knownTagsOf(snapshot));body ??=parsed.body;validateMetadata(data,{document:true});validateMarkdownBody(body);
-  const changes=[changeFor(snapshot,path,serializeContentDocument({metadata:data,body}))];
-  if(data.title!==parsed.metadata.title){const parent=entryFile(snapshot,identity.kind,identity.slug);if(parent){const info=parseContentFile(parent),documents=(info.metadata.documents||[]).map(item=>item.path===identity.relative?{...item,title:data.title}:item);changes.push(...updateEntryChanges(snapshot,{kind:identity.kind,slug:identity.slug,metadata:{documents}}));}}
+  const identity=documentIdentity(path),files=filesOf(snapshot),file=files.get(path);if(!file)throw ownerError('The reading note is missing. Reload the content snapshot.');const parsed=parseContentFile(file),data={...parsed.metadata,...metadata};data.tags=normalizeTags(data.tags,knownTagsOf(snapshot));body ??=parsed.body;validateMetadata(data,{document:true});
+  const changes=[];let relative=identity.relative;
+  if(parsed.format==='mdx'&&body!==parsed.body){if(parsed.conversionError)throw ownerError(parsed.conversionError);body=convertMdxToMarkdown(body);const target=path.replace(/\.mdx$/,'.md');if(files.has(target))throw ownerError('A Markdown reading note already uses this URL.');const original=`hub/public/uploads/files/owner-originals/${identity.kind}/${identity.slug}/files/${identity.relative}`;if(!files.has(original))changes.push(changeFor(snapshot,original,file.content));changes.push(deleteFor(snapshot,path),changeFor(snapshot,target,serializeContentDocument({metadata:data,body})));relative=relative.replace(/\.mdx$/,'.md');}
+  else{if(parsed.format!=='mdx')validateMarkdownBody(body);changes.push(changeFor(snapshot,path,documentSource(data,body)));}
+  if(data.title!==parsed.metadata.title||data.order!==parsed.metadata.order||relative!==identity.relative){const parent=entryFile(snapshot,identity.kind,identity.slug);if(parent){const info=parseContentFile(parent),documents=(info.metadata.documents||[]).map(item=>item.path===identity.relative?{...item,title:data.title,path:relative,...(data.order!==undefined?{order:data.order}:{})}:item);changes.push(...updateEntryChanges(snapshot,{kind:identity.kind,slug:identity.slug,metadata:{documents}}));}}
   return changes;
+}
+export function reorderDocumentChanges(snapshot,{kind,slug,paths}) {
+  const parent=entryFile(snapshot,kind,slug);if(!parent)throw ownerError('Choose an existing course or article.');
+  const files=filesOf(snapshot),actual=[...files.keys()].filter(path=>path.startsWith(`${prefix}${kind}/${slug}/files/`)&&/\.mdx?$/.test(path));
+  if(!Array.isArray(paths)||paths.length!==actual.length||new Set(paths).size!==paths.length||paths.some(path=>!actual.includes(path)))throw ownerError('Chapter order must contain every current reading note exactly once. Reload the chapter list.');
+  const parsed=parseContentFile(parent),changes=[],documents=[];
+  for(const [order,path] of paths.entries()){const file=files.get(path),document=parseContentFile(file),identity=documentIdentity(path);changes.push(changeFor(snapshot,path,documentSource({...document.metadata,order},document.body)));documents.push({...(parsed.metadata.documents||[]).find(item=>item.path===identity.relative),title:document.metadata.title,path:identity.relative,url:identity.url,order});}
+  return [...changes,...updateEntryChanges(snapshot,{kind,slug,metadata:{documents}})];
+}
+// Imports a safe reading copy only. The selected Library record and its bytes stay unchanged.
+export function importCourseDocumentChanges(snapshot,{slug,sourceFileId,source,path,metadata={}}) {
+  assertSlug(slug);const files=filesOf(snapshot),record=files.get(`hub/src/data/files/${sourceFileId}.json`);
+  if(!record?.content)throw ownerError('Choose an existing Library file.');const original=JSON.parse(record.content);
+  if(!/\.(?:md|mdx|markdown)$/i.test(original.originalName||original.name||''))throw ownerError('Only Markdown or MDX can be imported as a course chapter. Other files remain course attachments.');
+  if(typeof source!=='string'||utf8Bytes(source).length>OWNER_LIMITS.textBytes||source.includes('\u0000'))throw ownerError('Course-note imports require complete UTF-8 text up to 1 MiB.');
+  path ||= (original.relativePath||original.originalName||original.name).replace(/\.(?:mdx?|markdown)$/i,'.md');safeRelativePath(path);
+  let body=source,sourceMetadata={};if(/^\uFEFF?---\r?\n/.test(source)||source.startsWith('---\n')||source.startsWith('---\r\n')){const parsed=parseFrontmatter(source);body=parsed.body;sourceMetadata=parsed.metadata;}
+  // MDX imports become inert Markdown. Known simple components can be converted;
+  // arbitrary JSX/imports/expressions are displayed as source text, never compiled.
+  if(/\.mdx$/i.test(original.originalName||original.name||'')){try{body=convertMdxToMarkdown(body);}catch{body=inertImportedMarkdown(body);}}
+  else body=inertImportedMarkdown(body);
+  const library=[...files.values()].filter(file=>/^hub\/src\/data\/files\/[^/]+\.json$/.test(file.path)&&file.content).map(file=>JSON.parse(file.content));
+  const replacements=[],resourceIDs=new Set(),tree=parser.parse(body);
+  const walk=node=>{if(['link','image','definition'].includes(node.type)&&! /^(?:[a-z][a-z\d+.-]*:|\/|#)/i.test(node.url)){const match=node.url.match(/^([^?#]*)(.*)$/),relative=resolveRelative(original.relativePath||original.originalName,match[1]);let candidates=library.filter(file=>file.relativePath===relative);if(candidates.length>1)candidates=candidates.filter(file=>file.folderName===original.folderName);if(candidates.length!==1)throw ownerError(`The relative resource "${node.url}" needs one matching Library file. Attach that original or use an explicit URL before importing.`);const resource=candidates[0];resourceIDs.add(resource.id);if(node.type==='image'&&!/\.(png|jpe?g|gif|webp|avif|bmp)$/i.test(resource.originalName||resource.name))throw ownerError('Imported images must use a safe raster format; keep other formats as downloadable files.');const route=node.type==='image'?(resource.previewUrl||resource.downloadUrl):`/files/${encodeURIComponent(resource.id)}/`,slice=body.slice(node.position.start.offset,node.position.end.offset),offset=slice.indexOf(node.url);if(offset>=0)replacements.push([node.position.start.offset+offset,node.position.start.offset+offset+node.url.length,route+match[2]]);}for(const child of node.children||[])walk(child);};walk(tree);
+  for(const [start,end,value]of replacements.sort((a,b)=>b[0]-a[0]))body=body.slice(0,start)+value+body.slice(end);
+  const title=sourceMetadata.title||body.match(/^#\s+(.+)$/m)?.[1]||original.displayName||path.split('/').pop().replace(/\.md$/i,'');
+  const changes=createDocumentChanges(snapshot,{kind:'notes',slug,path,archiveOriginal:false,body,metadata:{title,description:sourceMetadata.description||original.description||`Imported course note: ${original.originalName||original.name}`,...metadata,sourceFileId:original.id,relatedFiles:[...new Set([original.id,...resourceIDs,...(metadata.relatedFiles||[])])]}});
+  const attached=withFileRelations(original,'notes',[...new Set([...fileRelations(original,'notes'),slug])]);
+  changes.push(changeFor(snapshot,record.path,JSON.stringify(attached,null,2)+'\n'));return changes;
 }
 export function deleteDocumentChanges(snapshot,{path,confirmation}) {
   const identity=documentIdentity(path),files=filesOf(snapshot),file=files.get(path);if(!file)throw ownerError('The reading note no longer exists.');const parsed=parseContentFile(file);if(confirmation!==parsed.metadata.title)throw ownerError('Enter the exact reading note title before deleting it.','DELETE_CONFIRMATION');

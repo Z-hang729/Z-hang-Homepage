@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { validateData as validateOwnerData, validateAsset } from '../src/lib/owner/policy.mjs';
 import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../src/lib/files.mjs';
+import {readKnowledgeGraph} from './knowledge-source.mjs';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const collections = ['research', 'notes', 'projects'];
@@ -179,6 +180,7 @@ export async function validateContent(rootDir = process.cwd()) {
       const id = `${project}/${path.basename(file).replace(/\.mdx?$/, '')}`;
       if (logIds.has(id)) report(file, `duplicate research log "${id}"`);
       logIds.add(id);
+      routes.add(`/research/${project}/logs/${path.basename(file).replace(/\.mdx?$/, '')}`);
       entries.push({ collection: 'logs', slug: id, file, data, body });
     } catch (error) { errors.push(error.message); }
   }
@@ -232,6 +234,7 @@ export async function validateContent(rootDir = process.cwd()) {
     }
   }
   if (!profile?.email && !profile?.github) warnings.push('Public contact details are intentionally empty; add only details you choose to publish.');
+  try{readKnowledgeGraph(root);}catch(error){errors.push(`Knowledge connections: ${error.message}`);}
   return { errors, warnings, entries };
 }
 

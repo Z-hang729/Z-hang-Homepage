@@ -232,8 +232,9 @@ export class OwnerService {
     }
     const actualHead = await github.head();
     if (actualHead !== params.expectedHead) throw new OwnerError('HEAD_CONFLICT', '仓库已经更新，请刷新并合并草稿后发布。', 409, { actualHead });
-    const contentPaths = new Set(params.changes.map(change => change.path));
-    const snapshot = await this.snapshot(github, actualHead, contentPaths);
+    // Validate the resulting graph against every existing content record, not
+    // only the changed records: parent pages and incoming links also matter.
+    const snapshot = await this.snapshot(github, actualHead);
     const normalized = validateChangeSet(params.changes, { snapshotFiles: new Map(snapshot.files.map(file => [file.path, file])), allowTrustedMdx: true });
     await this.files.validateMetadataChanges(normalized.changes,{snapshotFiles:snapshot.files});
     await this.storage.put(key, { fingerprint, expectedHead: actualHead, expiresAt: this.now() + 86400000 });

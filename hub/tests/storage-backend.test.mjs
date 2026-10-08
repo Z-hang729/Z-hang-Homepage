@@ -4,6 +4,7 @@ import { createHash, createHmac } from 'node:crypto';
 import { OwnerService, configuration } from '../owner-backend/service.mjs';
 import { presignR2, STORAGE_LIMITS } from '../owner-backend/storage.mjs';
 import { digest, seal, fromBase64, toBase64 } from '../owner-backend/crypto.mjs';
+import { serializeContentDocument } from '../src/lib/owner/model.mjs';
 
 const origin = 'https://owner.example.com';
 const site = 'https://z-hang729.github.io';
@@ -153,6 +154,45 @@ async function deleteEnvelope(f,file,overrides={}){
   const entry=snapshot.files.find(record=>record.path===`hub/src/data/files/${file.id}.json`);
   return {id:file.id,storageKey:file.storageKey,deletePublished:true,expectedHead:snapshot.head,expectedSha:entry?.sha??null,confirmation:file.displayName,...overrides};
 }
+
+const contentMetadata={title:'Existing fixture',description:'Owner-authored fixture.',date:'2026-10-01',updated:'2026-10-02',tags:[]};
+const knowledgeDeleteCases=[
+  ['log relatedFiles','hub/src/content/logs/study/update.md',id=>({metadata:{...contentMetadata,project:'study',relatedFiles:[id]},body:'Log body.'})],
+  ['chapter relatedFiles','hub/src/content/notes/course/files/topic.md',id=>({metadata:{...contentMetadata,relatedFiles:[id]},body:'Chapter body.'})],
+  ['log Wiki link','hub/src/content/logs/study/update.md',id=>({metadata:{...contentMetadata,project:'study'},body:`[[file:${id}|Original observation]]`})],
+  ['chapter Markdown link with production base','hub/src/content/notes/course/files/topic.md',id=>({metadata:contentMetadata,body:`[Original observation](/Z-hang-Homepage/files/${id}/)`})],
+  ['chapter reference-style Markdown','hub/src/content/notes/course/files/topic.md',id=>({metadata:contentMetadata,body:`[Original observation][asset]\n\n[asset]: /files/${id}/`})],
+  ['log canonical-compatible alias relation','hub/src/content/logs/study/update.md',id=>({metadata:{...contentMetadata,project:'study',relations:[{target:`files:${id}`,type:'uses'}]},body:'Log body.'})],
+  ['chapter sourceFileId','hub/src/content/notes/course/files/topic.md',id=>({metadata:{...contentMetadata,sourceFileId:id},body:'Reading copy.'})],
+];
+for(const [name,path,content]of knowledgeDeleteCases)test(`Provider-first delete blocks ${name} before provider DELETE and succeeds after published unlink`,async()=>{
+ const f=await fixture();
+ f.source.set('hub/src/content/research/study/index.md',serializeContentDocument({metadata:contentMetadata,body:'Existing project.'}));
+ f.source.set('hub/src/content/notes/course/index.md',serializeContentDocument({metadata:{...contentMetadata,course:'Course',semester:'Fall 2026',category:'Others'},body:'Existing course.'}));
+ const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);await f.publish(file);
+ const original=content(file.id);f.source.set(path,serializeContentDocument(original));
+ const params=await deleteEnvelope(f,file),deletes=()=>f.calls.filter(call=>call.method==='DELETE'&&/\/releases\/assets\/\d+$/.test(call.path));
+ const blocked=await f.rpc('storage-delete',params);assert.equal(blocked.status,409,await blocked.clone().text());assert.equal((await blocked.json()).error.code,'FILE_KNOWLEDGE_REFERENCE');
+ assert.equal(deletes().length,0,'Knowledge guard must execute before provider DELETE');assert.equal(f.assets.size,1);assert.ok(f.source.has(`hub/src/data/files/${file.id}.json`));assert.ok((await f.store.get(`file:${file.id}`)).current);assert.equal([...f.store.values.keys()].some(key=>key.startsWith('file-delete-operation:')),false);
+ const snapshot=await(await f.rpc('snapshot')).json(),unlinked={...original.metadata};delete unlinked.relatedFiles;delete unlinked.relations;delete unlinked.sourceFileId;
+ const update=await f.rpc('publish',{expectedHead:snapshot.head,idempotencyKey:crypto.randomUUID(),changes:[{path,action:'upsert',expectedSha:snapshot.files.find(entry=>entry.path===path).sha,encoding:'utf8',content:serializeContentDocument({metadata:unlinked,body:'Reference intentionally removed by Owner.'})}]});assert.equal(update.status,200,await update.clone().text());
+ assert.equal((await f.rpc('storage-delete',params)).status,409,'Stale pre-unlink confirmation cannot delete bytes');assert.equal(deletes().length,0);
+ const deleted=await f.rpc('storage-delete',await deleteEnvelope(f,file));assert.equal(deleted.status,200,await deleted.clone().text());assert.equal((await deleted.json()).providerDeleted,true);assert.equal(deletes().length,1);assert.equal(f.assets.size,0);assert.ok(f.source.has(`hub/src/data/files/${file.id}.json`),'Metadata removal remains the separate confirmed publication step');
+});
+
+test('A single-body publication loads unchanged parents and incoming references; log/chapter deletion cannot orphan them',async()=>{
+ const f=await fixture(),researchPath='hub/src/content/research/study/index.md',coursePath='hub/src/content/notes/course/index.md',chapterPath='hub/src/content/notes/course/files/topic.md',logPath='hub/src/content/logs/study/protected.md';
+ const research=serializeContentDocument({metadata:contentMetadata,body:'Preserved project body.'}),course=serializeContentDocument({metadata:{...contentMetadata,course:'Course',semester:'Fall 2026',category:'Others'},body:'Preserved course body.'});f.source.set(researchPath,research);f.source.set(coursePath,course);
+ const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);await f.publish(file);const fileMetadata=f.source.get(`hub/src/data/files/${file.id}.json`);
+ const chapterMetadata={...contentMetadata,relatedFiles:[file.id],relations:[{target:'log:study/protected',type:'related'}]};f.source.set(chapterPath,serializeContentDocument({metadata:chapterMetadata,body:'Original chapter.'}));f.source.set(logPath,serializeContentDocument({metadata:{title:'Protected log',project:'study',date:'2026-10-08',relatedNotes:['note:course/files/topic']},body:'Original log.'}));
+ const snapshot=await(await f.rpc('snapshot')).json();
+ const publish=async changes=>f.rpc('publish',{expectedHead:(await(await f.rpc('snapshot')).json()).head,idempotencyKey:crypto.randomUUID(),changes});
+ const changed=await publish([{path:chapterPath,action:'upsert',expectedSha:snapshot.files.find(entry=>entry.path===chapterPath).sha,encoding:'utf8',content:serializeContentDocument({metadata:chapterMetadata,body:`Updated chapter. [Original](/files/${file.id}/)`})}]);assert.equal(changed.status,200,await changed.clone().text());
+ assert.equal(f.source.get(researchPath),research);assert.equal(f.source.get(coursePath),course);assert.equal(f.source.get(`hub/src/data/files/${file.id}.json`),fileMetadata);
+ const current=await(await f.rpc('snapshot')).json(),count=f.mutations();
+ for(const path of [chapterPath,logPath]){const rejected=await publish([{path,action:'delete',expectedSha:current.files.find(entry=>entry.path===path).sha}]);assert.equal(rejected.status,400,await rejected.clone().text());assert.equal((await rejected.json()).error.code,'INVALID_RELATION');assert.equal(f.mutations(),count);assert.ok(f.source.has(path));}
+ const both=await publish([chapterPath,logPath].map(path=>({path,action:'delete',expectedSha:current.files.find(entry=>entry.path===path).sha})));assert.equal(both.status,200,await both.clone().text());assert.ok(!f.source.has(chapterPath)&&!f.source.has(logPath));assert.equal(f.assets.size,1,'Deleting content references never removes shared original bytes');
+});
 test('Explicit confirmed deletion removes provider bytes before metadata and durably recovers a lost reply',async()=>{
   const f=await fixture({loseDeleteResponse:true});const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);await f.publish(file);
   const params=await deleteEnvelope(f,file),path=`hub/src/data/files/${file.id}.json`;

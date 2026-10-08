@@ -123,3 +123,11 @@ test('HTML link checker supports root deployment and percent encoded assets', as
   await put('dist/uploads/笔记.pdf', '%PDF-1.4');
   assert.deepEqual((await checkBuiltLinks({ distDir: path.join(root, 'dist'), basePath: '/', siteUrl: 'https://user.github.io' })).errors, []);
 });
+
+test('HTML link checker checks actual IDs, excluding data-content-id attributes',async t=>{
+  const {root,put}=await fixture(t);
+  await put('dist/index.html','<article data-content-id="note:course"><section data-content-id="note:course" id="links"></section></article><a href="#links">Links</a>');
+  assert.deepEqual((await checkBuiltLinks({distDir:path.join(root,'dist')})).errors,[]);
+  await put('dist/index.html','<h2 id="repeated">First</h2><h3 id="repeated">Second</h3>');
+  assert((await checkBuiltLinks({distDir:path.join(root,'dist')})).errors.some(error=>error.includes('duplicate id repeated')));
+});

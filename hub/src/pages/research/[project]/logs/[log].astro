@@ -1,0 +1,12 @@
+---
+import { getCollection, render } from 'astro:content';
+import ResearchLogPage from '../../../../components/ResearchLogPage.astro';
+import { logIdentity, logNeighbors, researchLogData } from '../../../../lib/research.mjs';
+export async function getStaticPaths(){
+ const [logs,projects]=await Promise.all([getCollection('logs'),getCollection('research')]);
+ return logs.map(log=>{const data=researchLogData(log),projectEntry=projects.find(project=>project.id===data.project);return {params:{project:data.project,log:logIdentity(log).split('/').slice(1).join('/')},props:{log,projectEntry,...logNeighbors(logs.filter(item=>researchLogData(item).project===data.project),log)}};}).filter(page=>page.props.projectEntry);
+}
+const {log,projectEntry,previous,next}=Astro.props;
+const {Content,headings}=await render(log);
+---
+<ResearchLogPage log={log} projectEntry={projectEntry} Content={Content} headings={headings} previous={previous} next={next}/>

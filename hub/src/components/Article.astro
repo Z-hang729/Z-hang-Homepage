@@ -1,16 +1,23 @@
 ---
-import { getCollection, render } from 'astro:content';
+import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
 import PDFViewer from './PDFViewer.astro';
 import Citation from './Citation.astro';
 import FileResources from './FileResources.astro';
+import ResearchTimeline from './ResearchTimeline.astro';
+import CourseNavigation from './CourseNavigation.astro';
+import KnowledgeConnections from './KnowledgeConnections.astro';
+import {readKnowledgeGraph} from '../../scripts/knowledge-source.mjs';
+import {connectionsFor} from '../lib/knowledge.mjs';
+import {getCourseChapters,getChapterNeighbors,chapterIdentity} from '../lib/notes.mjs';
 import { getFiles } from '../lib/file-records';
 import { url, siteConfig } from '../lib/site';
-import { allEntries, dateLabel, entryPath, escapeXML, readingMinutes, sortLatest, tagSlug } from '../lib/content';
+import { allEntries, dateLabel, entryPath, escapeXML, readingMinutes, sortLatest, tagSlug,getDocuments } from '../lib/content';
 import type { Heading, HubEntry } from '../lib/content';
-interface Props { entry: HubEntry; Content: any; headings: Heading[]; documentTitle?: string; documentBody?: string; documentPath?: string; }
-const { entry, Content, headings, documentTitle, documentBody, documentPath } = Astro.props;
-const data = entry.data;
+import '../styles/academic.css';
+interface Props { entry: HubEntry; Content: any; headings: Heading[]; documentTitle?: string; documentBody?: string; documentPath?: string; documentMetadata?:Record<string,any>; }
+const { entry, Content, headings, documentTitle, documentBody, documentPath,documentMetadata } = Astro.props;
+const data = {...entry.data,...documentMetadata,date:new Date(documentMetadata?.date||entry.data.date),updated:new Date(documentMetadata?.updated||entry.data.updated)};
 const noteData = entry.collection === 'notes' ? entry.data : undefined;
 const researchData = entry.collection === 'research' ? entry.data : undefined;
 const projectData = entry.collection === 'projects' ? entry.data : undefined;
@@ -21,19 +28,29 @@ const siblings = sortLatest(entries.filter((item) => item.collection === entry.c
 const position = siblings.findIndex((item) => item.id === entry.id);
 const previous = siblings[position - 1];
 const next = siblings[position + 1];
+const chapters=entry.collection==='notes'?getCourseChapters(entry.id,getDocuments('notes'),entry.data.documents):[];
+const chapterNeighbors=getChapterNeighbors(chapters,documentPath||'');
+const previousURL=documentPath?chapterNeighbors.previous?.url:previous?entryPath(previous):undefined;
+const nextURL=documentPath?chapterNeighbors.next?.url:next?entryPath(next):undefined;
+const previousTitle=documentPath?chapterNeighbors.previous?.title:previous?.data.title;
+const nextTitle=documentPath?chapterNeighbors.next?.title:next?.data.title;
+const contentTypes={research:'research',notes:'note',projects:'project'};
+const contentSlug=documentPath?documentPath.split('/src/content/'+entry.collection+'/')[1].replace(/\.mdx?$/,''):entry.id;
+const contentId=documentPath&&entry.collection==='notes'?chapterIdentity(entry.id,documentPath):contentTypes[entry.collection]+':'+contentSlug;
+const connections=connectionsFor(readKnowledgeGraph(process.cwd(),{publicOnly:true}),contentId),hasConnections=connections.outgoing.length>0||connections.incoming.length>0;
 const related = entries.filter((item) => !(item.collection === entry.collection && item.id === entry.id) && item.data.tags.some((tag) => data.tags.includes(tag))).slice(0, 3);
 const logs = entry.collection === 'research' ? sortLatest((await getCollection('logs')).filter((log) => log.data.project === entry.id)) : [];
-const renderedLogs = await Promise.all(logs.map(async (log) => ({ log, ...(await render(log)) })));
 const pdfs = data.attachments.filter((file) => file.type?.toLowerCase() === 'pdf' || /\.pdf(?:[?#]|$)/i.test(file.url));
 const otherFiles = data.attachments.filter((file) => !pdfs.includes(file));
-const storedFiles = getFiles({kind:entry.collection,slug:entry.id});
+const explicitFiles=new Set([...(data.relatedFiles||[]),...(data.relations||[]).filter((relation:any)=>relation.target.startsWith('file:')).map((relation:any)=>relation.target.slice(5).split('#')[0])]);
+const storedFiles = getFiles().filter(file=>explicitFiles.has(file.id)||(!documentPath&&getFiles({kind:entry.collection,slug:entry.id}).some(item=>item.id===file.id)));
 const toc = [...headings.filter((heading) => heading.depth === 2 || heading.depth === 3),
   ...(data.documents.length ? [{ depth: 2, slug: 'files', text: 'Course files' }] : []),
   ...(logs.length ? [{ depth: 2, slug: 'research-log', text: 'Research log' }] : []),
   ...(data.attachments.length ? [{ depth: 2, slug: 'attachments', text: 'Attachments' }] : []),
   ...(storedFiles.length ? [{ depth: 2, slug: 'file-resources', text: 'Files' }] : []),
   ...(data.references.length ? [{ depth: 2, slug: 'references', text: 'References' }] : []),
-  ...(related.length ? [{ depth: 2, slug: 'related-content', text: 'Related content' }] : []),
+  ...(hasConnections||related.length ? [{ depth: 2, slug: 'related-content', text: hasConnections?'Knowledge connections':'Related content' }] : []),
 ];
 const reading = readingMinutes(documentBody || entry.body);
 const repo = siteConfig.repo;
@@ -67,22 +84,27 @@ function treeHTML(tree: Tree): string {
       <div class="article-resources" data-pagefind-ignore>{data.github && <a href={url(data.github)} rel="noopener noreferrer">GitHub ↗</a>}{data.paper && <a href={url(data.paper)}>Paper ↗</a>}{data.data && <a href={url(data.data)}>Dataset ↗</a>}{projectData?.demoUrl && <a href={url(projectData.demoUrl)}>Demo ↗</a>}{projectData?.documentation && <a href={url(projectData.documentation)}>Documentation ↗</a>}{data.links.map((link) => <a href={url(link.url)}>{link.title} ↗</a>)}<button class="text-button" type="button" data-share>Copy page link ↗</button></div>
     </header>
     {data.demo && <aside class="demo-notice" role="note"><strong>Demonstration content.</strong> This page illustrates the archive structure and reading tools. Methods and examples are educational; it does not report Z-hang's research results, publications, or completed work.</aside>}
-    <div class="reading-layout">
-      <article class="reading-main" data-owner-detail data-owner-kind={entry.collection} data-owner-slug={entry.id} data-owner-document={documentPath ? `hub${documentPath}` : undefined}>
+    <progress class="reading-progress" data-reading-progress value="0" max="100" aria-label="Reading progress"></progress>
+    <div class:list={['reading-layout',{'notes-reading-layout':entry.collection==='notes'&&chapters.length>0}]}>
+      {entry.collection==='notes'&&chapters.length>0&&<CourseNavigation course={{id:entry.id,title:entry.data.title,url:entryPath(entry)}} chapters={chapters} activePath={documentPath}/>}
+      <article class="reading-main" data-owner-detail data-owner-kind={entry.collection} data-owner-slug={entry.id} data-content-id={contentId} data-owner-document={documentPath ? `hub${documentPath}` : undefined}>
         <div class="prose" data-owner-body><Content /></div>
         {data.documents.length > 0 && <section class="article-section" id="files"><h2>Course files</h2><p class="section-description">Browse the original folder structure. Markdown opens in the reader; the original files are available under Attachments.</p><nav class="file-tree" aria-label="Imported document files" set:html={treeHTML(fileTree)} /></section>}
-        {renderedLogs.length > 0 && <section class="article-section" id="research-log"><h2>Research log</h2><ol class="research-log">{renderedLogs.map(({ log, Content: LogContent }) => <li id={`log-${log.data.date.toISOString().slice(0, 10)}`} data-owner-log-path={`hub/src/content/logs/${log.id}.md`}><time datetime={log.data.date.toISOString()}>{dateLabel(log.data.date)}</time><div><h3>{log.data.title} {log.data.demo && <span class="demo-label">Demo</span>}</h3><div class="prose log-body"><LogContent /></div>{log.data.attachments?.length > 0 && <ul class="resource-list">{log.data.attachments.map(file => <li><a href={url(file.url)}>{file.title} ↓</a>{file.type && <span>{file.type.toUpperCase()}</span>}</li>)}</ul>}</div></li>)}</ol></section>}
+        {entry.collection==='research'&&!documentPath&&<ResearchTimeline project={entry} logs={logs}/>}
         {data.attachments.length > 0 && <section class="article-section" id="attachments"><h2>Attachments</h2>{pdfs.map((file) => <PDFViewer src={file.url} title={file.title} />)}{otherFiles.length > 0 && <ul class="resource-list">{otherFiles.map((file) => <li><a href={url(file.url)} download>{file.title} ↓</a>{file.type && <span>{file.type.toUpperCase()}</span>}</li>)}</ul>}</section>}
         <FileResources files={storedFiles}/>
         {data.references.length > 0 && <section class="article-section" id="references"><h2>References</h2><ol class="reference-list">{data.references.map((reference, index) => <li id={`reference-${index + 1}`}>{reference.authors.length > 0 && <span>{reference.authors.join(', ')}. </span>}{reference.year && <span>({reference.year}). </span>}<Citation title={reference.title} href={reference.url} />{reference.doi && <a href={`https://doi.org/${encodeURIComponent(reference.doi)}`}> DOI: {reference.doi}</a>}{reference.bibtex && <details><summary>BibTeX</summary><pre><code>{reference.bibtex}</code></pre></details>}</li>)}</ol></section>}
-        {related.length > 0 && <section class="article-section" id="related-content"><h2>Related content</h2><div class="related-grid">{related.map((item) => <a class="related-card" href={url(entryPath(item))}><span class="eyebrow">{item.collection}</span><h3>{item.data.title}</h3><p>{item.data.description}</p></a>)}</div></section>}
-        <footer class="article-footer" data-pagefind-ignore><p>Created {dateLabel(data.date)} · Last updated {dateLabel(data.updated)}{data.authors.length > 0 && <> · {data.authors.join(', ')}</>}</p>{sourceURL && <div class="article-source"><a href={sourceURL}>View source ↗</a><a href={editURL}>Edit on GitHub ↗</a></div>}<nav class="reading-neighbors" aria-label="Previous and next entries">{previous ? <a href={url(entryPath(previous))}><small>← Previous entry</small><strong>{previous.data.title}</strong></a> : <span />}{next && <a href={url(entryPath(next))}><small>Next entry →</small><strong>{next.data.title}</strong></a>}</nav></footer>
+        <KnowledgeConnections id={contentId}/>
+        {related.length > 0 && <section class="article-section" id={hasConnections?'related-by-tags':'related-content'}><h2>{hasConnections?'Shared tags':'Related content'}</h2><div class="related-grid">{related.map((item) => <a class="related-card" href={url(entryPath(item))}><span class="eyebrow">{item.collection}</span><h3>{item.data.title}</h3><p>{item.data.description}</p></a>)}</div></section>}
+        <footer class="article-footer" data-pagefind-ignore><p>Created {dateLabel(data.date)} · Last updated {dateLabel(data.updated)}{data.authors.length > 0 && <> · {data.authors.join(', ')}</>}</p>{sourceURL && <div class="article-source"><a href={sourceURL}>View source ↗</a><a href={editURL}>Edit on GitHub ↗</a></div>}<nav class="reading-neighbors" aria-label="Previous and next entries">{previousURL ? <a href={url(previousURL)}><small>← Previous {documentPath?'chapter':'entry'}</small><strong>{previousTitle}</strong></a> : <span />}{nextURL && <a href={url(nextURL)}><small>Next {documentPath?'chapter':'entry'} →</small><strong>{nextTitle}</strong></a>}</nav></footer>
       </article>
       {toc.length > 0 && <aside class="toc" data-pagefind-ignore><details open data-toc><summary>On this page <span aria-hidden="true">↗</span></summary><nav aria-label="Table of contents"><ul class="toc-links">{toc.map((heading) => <li class={heading.depth === 3 ? 'toc-nested' : ''}><a href={`#${heading.slug}`}>{heading.text}</a></li>)}</ul></nav></details></aside>}
     </div>
   </div>
 </BaseLayout>
 <script>
+  const progress=document.querySelector<HTMLProgressElement>('[data-reading-progress]'),article=document.querySelector<HTMLElement>('.reading-main');
+  if(progress&&article){let scheduled=false;const update=()=>{scheduled=false;const start=article.offsetTop,end=start+article.offsetHeight-innerHeight;progress.value=end<=start?100:Math.max(0,Math.min(100,(scrollY-start)/(end-start)*100));};const schedule=()=>{if(!scheduled){scheduled=true;requestAnimationFrame(update);}};addEventListener('scroll',schedule,{passive:true});addEventListener('resize',schedule);update();}
   const toc = document.querySelector<HTMLDetailsElement>('[data-toc]');
   if (toc) {
     const mobile = window.matchMedia('(max-width: 900px)');
@@ -99,6 +121,7 @@ function treeHTML(tree: Tree): string {
   }
 </script>
 <style>
+  .reading-progress{display:block;width:100%;height:3px;border:0;accent-color:var(--accent);margin:1rem 0 2rem}
   .reference-list pre{max-width:100%;overflow:auto;padding:.8rem;font-size:.75rem;background:var(--surface);border-radius:6px}
   .reading-shell{padding-top:2.5rem;padding-bottom:5rem}.breadcrumb{display:flex;flex-wrap:wrap;gap:.5rem;font-size:.75rem;color:var(--muted,#667085);margin-bottom:2rem}.breadcrumb a{text-decoration:none}.article-kicker{display:flex;gap:.8rem;align-items:center}.reading-header{max-width:840px;margin-bottom:1.6rem}.reading-header h1{font-size:clamp(2.2rem,4.5vw,3.8rem);letter-spacing:-.04em;line-height:1.12;margin:.8rem 0 1rem}.article-description{font-size:1.1rem;max-width:720px;line-height:1.65;color:var(--muted,#667085)}.article-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.8rem 1.25rem;font-size:.8rem;color:var(--muted,#667085);margin:1.3rem 0}.article-tags{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:1rem}.article-resources{display:flex;gap:1.2rem;flex-wrap:wrap;margin-top:1.2rem;font-size:.8rem}.text-button{border:0;background:none;padding:0;color:var(--accent,#3388a8);font:inherit;cursor:pointer}.demo-notice{border:1px solid var(--border,#dde5e8);padding:.9rem 1.1rem;border-radius:10px;color:var(--muted,#667085);font-size:.85rem;line-height:1.7;margin:1.5rem 0 2rem;max-width:850px}.demo-label{padding:.1rem .45rem;border:1px solid var(--border,#dde5e8);border-radius:4px;text-transform:uppercase;font-size:.6rem;letter-spacing:.08em;vertical-align:middle}.reading-layout{display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:clamp(2rem,5vw,5rem);align-items:start}.reading-main{min-width:0;max-width:850px}.toc{position:sticky;top:105px;font-size:.78rem;border-left:1px solid var(--border,#dde5e8);padding-left:1.4rem;max-height:calc(100vh - 140px);overflow:auto}.toc summary{font-weight:600;list-style:none;display:flex;justify-content:space-between;cursor:pointer}.toc summary::-webkit-details-marker{display:none}.toc-links{list-style:none;margin:1rem 0 0;padding:0}.toc-links li{margin:.55rem 0}.toc-links a{color:var(--muted,#667085);text-decoration:none;line-height:1.5;display:block;border-left:2px solid transparent;padding-left:.5rem}.toc-links a[aria-current]{color:var(--accent,#3388a8);border-color:currentColor}.toc-nested{padding-left:.7rem;font-size:.72rem}.article-section{margin-top:3rem;padding-top:.5rem}.article-section h2{font-size:1.55rem;letter-spacing:-.02em}.section-description{color:var(--muted,#667085);font-size:.9rem;line-height:1.6}.resource-list{list-style:none;padding:0}.resource-list li{display:flex;align-items:center;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border,#dde5e8);padding:.85rem 0}.resource-list li span{font-size:.65rem;color:var(--muted,#667085)}.research-log{list-style:none;padding:0}.research-log>li{display:grid;grid-template-columns:105px 1fr;gap:1.5rem;padding:1rem 0 1.5rem;border-top:1px solid var(--border,#dde5e8)}.research-log time{font-size:.75rem;color:var(--muted,#667085);padding-top:.3rem}.research-log h3{font-size:1rem;margin:0 0 .5rem}.log-body{font-size:.9rem}.course-progress{max-width:400px;font-size:.75rem;color:var(--muted,#667085)}.course-progress>span{display:flex;justify-content:space-between}.course-progress progress{height:5px;width:100%;accent-color:var(--accent,#3388a8);margin-top:.4rem}.file-tree{padding:1rem 1.2rem;background:var(--surface,#f3f7f8);border:1px solid var(--border,#dde5e8);border-radius:10px;font-size:.85rem}.file-tree :global(ul){list-style:none;margin:.35rem 0;padding-left:1.1rem}.file-tree :global(ul ul){border-left:1px solid var(--border,#dde5e8)}.file-tree :global(li){padding:.2rem 0}.file-tree :global(summary){cursor:pointer;font-weight:600}.related-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem}.related-card{padding:1rem;border:1px solid var(--border,#dde5e8);border-radius:10px;text-decoration:none}.related-card h3{font-size:1rem;line-height:1.4}.related-card p{font-size:.8rem;color:var(--muted,#667085);line-height:1.5}.article-footer{margin-top:3rem;padding-top:1.5rem;border-top:1px solid var(--border,#dde5e8)}.article-footer>p{font-size:.75rem;color:var(--muted,#667085)}.article-source{display:flex;gap:1rem;font-size:.8rem}.reading-neighbors{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:2rem}.reading-neighbors a{padding:1rem;border:1px solid var(--border,#dde5e8);border-radius:10px;text-decoration:none}.reading-neighbors a:last-child{text-align:right}.reading-neighbors small,.reading-neighbors strong{display:block}.reading-neighbors small{font-size:.7rem;color:var(--muted,#667085);margin-bottom:.4rem}.reading-neighbors strong{font-size:.9rem;line-height:1.5}.reference-list{font-size:.9rem;line-height:1.8;padding-left:1.3rem}.reference-list li{margin:.65rem 0}
   @media(max-width:900px){.reading-layout{display:flex;flex-direction:column;gap:1.7rem}.reading-main{width:100%;order:2}.toc{position:static;order:1;width:100%;max-height:none;border:1px solid var(--border,#dde5e8);border-radius:8px;padding:.8rem 1rem}.toc-links{columns:2}.reading-header h1{font-size:clamp(2rem,6vw,3rem)}}

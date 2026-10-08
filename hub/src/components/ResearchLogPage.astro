@@ -1,0 +1,39 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/academic.css';
+import FileResources from './FileResources.astro';
+import KnowledgeConnections from './KnowledgeConnections.astro';
+import { getFiles } from '../lib/file-records';
+import { dateLabel, readingMinutes, getDocuments } from '../lib/content';
+import { getCollection } from 'astro:content';
+import { url } from '../lib/site';
+import { researchLogData, logPath, logRepositoryPath } from '../lib/research.mjs';
+interface Props {log:any;projectEntry:any;Content:any;headings?:any[];previous?:any;next?:any;}
+const {log,projectEntry,Content,headings=[],previous,next}=Astro.props,data=researchLogData(log);
+const files=getFiles({includeUnlisted:true}).filter(file=>data.relatedFiles.includes(file.id));
+const notes=await getCollection('notes'),projects=await getCollection('projects'),documents=getDocuments('notes');
+const relatedNotes=data.relatedNotes.map(raw=>{const id=raw.replace(/^note:/,'').replace(/\.(md|mdx)$/,'');const note=notes.find(item=>item.id===id),document=documents.find(item=>item.slug===id);return note?{title:note.data.title,path:`/notes/${note.id}/`}:document?{title:document.module.frontmatter.title,path:`/notes/${document.slug}/`}:null;}).filter(Boolean);
+const relatedProjects=data.relatedProjects.map(raw=>projects.find(item=>item.id===raw.replace(/^project:/,''))).filter(Boolean);
+const toc=headings.filter(heading=>heading.depth===2||heading.depth===3);
+---
+<BaseLayout title={data.title} description={data.summary||projectEntry.data.description}>
+ <article class="container research-log-page" data-owner-kind="research" data-owner-slug={projectEntry.id} data-owner-log-path={logRepositoryPath(log)} data-log-id={data.id} data-content-id={`log:${data.id}`}>
+  <nav class="log-breadcrumb" aria-label="Breadcrumb"><a href={url('/research/')}>Research</a><span>/</span><a href={url(`/research/${projectEntry.id}/`)}>{projectEntry.data.title}</a><span>/</span><span>Research log</span></nav>
+  <header class="log-header"><p class="eyebrow">RESEARCH NOTEBOOK</p><h1>{data.title}</h1>{data.summary&&<p class="log-description">{data.summary}</p>}
+   <p class="log-metadata"><time datetime={data.date}>{dateLabel(data.date)}</time><span>Updated <time datetime={data.updated}>{dateLabel(data.updated)}</time></span>{data.status&&<span>{data.status}</span>}<span>{data.kind}</span><span>{readingMinutes(log.body)} min read</span>{data.demo&&<span>Example content</span>}</p>
+   {data.tags.length>0&&<p class="log-tags">{data.tags.map(tag=><span>{tag}</span>)}</p>}
+  </header>
+  <div class="log-reading-layout"><div class="log-reading-main"><div class="prose log-content"><Content/></div>
+   {data.attachments.length>0&&<section class="log-section" id="log-attachments"><h2>Attachments</h2><ul>{data.attachments.map(file=><li><a href={url(file.url)}>{file.title}</a>{file.type&&<small> · {file.type}</small>}</li>)}</ul></section>}
+   {files.length>0&&<FileResources files={files} title="Related files"/>}
+   {relatedNotes.length>0&&<section class="log-section" id="related-notes"><h2>Related notes</h2><ul>{relatedNotes.map(note=><li><a href={url(note!.path)}>{note!.title}</a></li>)}</ul></section>}
+   {relatedProjects.length>0&&<section class="log-section" id="related-projects"><h2>Related projects</h2><ul>{relatedProjects.map(project=><li><a href={url(`/projects/${project!.id}/`)}>{project!.data.title}</a></li>)}</ul></section>}
+   <KnowledgeConnections id={`log:${data.id}`}/>
+   {(previous||next)&&<nav class="log-neighbors" aria-label="Research log navigation">{previous?<a href={url(logPath(previous))}><small>← Newer log</small><strong>{previous.data.title}</strong></a>:<span/>}{next&&<a href={url(logPath(next))}><small>Older log →</small><strong>{next.data.title}</strong></a>}</nav>}
+   <p class="log-back"><a href={url(`/research/${projectEntry.id}/#research-log`)}>← Back to project timeline</a></p>
+  </div>{toc.length>0&&<aside class="log-toc" aria-label="Table of contents"><details open><summary>On this page</summary><ol>{toc.map(heading=><li class:list={{nested:heading.depth===3}}><a href={`#${heading.slug}`}>{heading.text}</a></li>)}</ol></details></aside>}</div>
+ </article>
+</BaseLayout>
+<style>
+ .research-log-page{max-width:1180px;padding-top:2.5rem;padding-bottom:5rem}.log-breadcrumb{display:flex;flex-wrap:wrap;gap:.5rem;font-size:.75rem;color:var(--muted);margin-bottom:2rem;overflow-wrap:anywhere}.log-header{max-width:850px;margin-bottom:2.5rem}.log-header h1{font:600 clamp(2rem,4.6vw,3.8rem)/1.15 var(--font-display);letter-spacing:-.035em;overflow-wrap:anywhere;margin:.7rem 0 1rem}.log-description{font-size:1.05rem;line-height:1.7;color:var(--muted);max-width:760px}.log-metadata{display:flex;flex-wrap:wrap;gap:.5rem 1.1rem;font-size:.75rem;color:var(--muted)}.log-tags{display:flex;flex-wrap:wrap;gap:.4rem}.log-tags span{font-size:.7rem;border:1px solid var(--line);border-radius:5px;padding:.2rem .5rem;color:var(--muted)}.log-reading-layout{display:grid;grid-template-columns:minmax(0,1fr) 200px;gap:3rem;align-items:start}.log-reading-main{min-width:0;max-width:850px}.log-toc{position:sticky;top:105px;font-size:.78rem;border-left:1px solid var(--line);padding-left:1.2rem;max-height:calc(100vh - 130px);overflow:auto}.log-toc summary{font-weight:600;cursor:pointer}.log-toc ol{list-style:none;padding:0;line-height:1.6}.log-toc li{margin:.55rem 0}.log-toc li.nested{padding-left:.75rem}.log-toc a{color:var(--muted)}.log-section{margin-top:2.5rem;border-top:1px solid var(--line);padding-top:1.5rem}.log-section h2{font-size:1.4rem}.log-section ul{padding-left:1.2rem;line-height:1.9;font-size:.9rem;overflow-wrap:anywhere}.log-section small{color:var(--muted)}.log-neighbors{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:3rem}.log-neighbors a{border:1px solid var(--line);border-radius:10px;padding:1rem;text-decoration:none;overflow-wrap:anywhere}.log-neighbors a:last-child{text-align:right}.log-neighbors small,.log-neighbors strong{display:block}.log-neighbors small{font-size:.7rem;color:var(--muted);margin-bottom:.4rem}.log-neighbors strong{font-size:.9rem;line-height:1.5}.log-back{font-size:.8rem;margin-top:1.5rem}@media(max-width:900px){.log-reading-layout{display:flex;flex-direction:column;gap:1.5rem}.log-reading-main{width:100%;order:2}.log-toc{position:static;order:1;width:100%;max-height:none;border:1px solid var(--line);border-radius:8px;padding:.8rem 1rem}.log-toc ol{columns:2}}@media(max-width:600px){.research-log-page{padding-top:1.5rem}.log-breadcrumb{margin-bottom:1.5rem}.log-toc ol{columns:1}.log-neighbors{grid-template-columns:1fr}.log-neighbors a:last-child{text-align:left}.log-neighbors>span{display:none}}
+</style>

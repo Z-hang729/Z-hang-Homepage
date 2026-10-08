@@ -1,0 +1,23 @@
+---
+import { url } from '../lib/site';
+interface Chapter { id: string; title: string; path: string; relativePath: string; url: string; order?: number; }
+interface Props { course: { id: string; title: string; url: string }; chapters: Chapter[]; activePath?: string; }
+const { course, chapters, activePath } = Astro.props;
+const active = chapters.find(chapter => chapter.path === activePath || chapter.id === activePath || chapter.relativePath === activePath);
+---
+<aside class="course-navigation" data-course-navigation>
+  <details open>
+    <summary>Course chapters <span>{chapters.length}</span></summary>
+    <nav aria-label={`${course.title} chapters`}>
+      <a class="course-navigation-overview" href={url(course.url)} aria-current={!active ? 'page' : undefined}>{course.title} <small>Overview</small></a>
+      {chapters.length > 0 ? <ol>{chapters.map((chapter, index) => <li data-chapter-id={chapter.id}><a href={url(chapter.url)} aria-current={active?.id === chapter.id ? 'page' : undefined}><span class="course-navigation-number" aria-hidden="true">{index + 1}</span><span>{chapter.title}<small>{chapter.relativePath.split('/').slice(0, -1).join(' / ')}</small></span></a></li>)}</ol> : <p class="course-navigation-empty">Reading chapters will appear here.</p>}
+    </nav>
+  </details>
+</aside>
+<script>
+  const narrow = window.matchMedia('(max-width: 900px)');
+  for (const navigation of document.querySelectorAll<HTMLElement>('[data-course-navigation]')) {
+    const details = navigation.querySelector('details');
+    if (details) { const adjust = () => { details.open = !narrow.matches; }; adjust(); narrow.addEventListener('change', adjust); }
+  }
+</script>

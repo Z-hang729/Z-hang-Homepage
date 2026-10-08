@@ -1,0 +1,18 @@
+---
+import {readKnowledgeGraph} from '../../scripts/knowledge-source.mjs';
+import {connectionsFor} from '../lib/knowledge.mjs';
+import {url} from '../lib/site';
+interface Props {id:string;}
+const {id}=Astro.props;
+const graph=readKnowledgeGraph(process.cwd(),{publicOnly:true});
+const {outgoing,incoming}=connectionsFor(graph,id);
+const labels:Record<string,string>={research:'Research',note:'Note',project:'Project',log:'Research log',file:'File'};
+---
+{(outgoing.length>0||incoming.length>0)&&<section class="knowledge-connections article-section" id="related-content" data-knowledge-connections data-content-id={id}>
+  <h2>Knowledge connections</h2>
+  {outgoing.length>0&&<div><h3>Related content</h3><ul>{outgoing.map(item=><li><a href={url(item.path)+(item.anchor?'#'+encodeURIComponent(item.anchor):'')}><span>{labels[item.type]}</span><strong>{item.title}</strong></a><small>{item.relation}</small></li>)}</ul></div>}
+  {incoming.length>0&&<div><h3>Referenced by</h3><ul>{incoming.map(item=><li><a href={url(item.path)}><span>{labels[item.type]}</span><strong>{item.title}</strong></a><small>{item.relation}</small></li>)}</ul></div>}
+</section>}
+<style>
+  .knowledge-connections{margin-top:2.5rem}.knowledge-connections h3{font-size:1rem;margin:1.4rem 0 .6rem}.knowledge-connections ul{list-style:none;padding:0}.knowledge-connections li{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;border-bottom:1px solid var(--border);padding:.75rem 0}.knowledge-connections a{display:flex;flex-wrap:wrap;gap:.8rem;text-decoration:none}.knowledge-connections a span,.knowledge-connections small{font-size:.72rem;color:var(--muted)}.knowledge-connections a strong{font-weight:500;overflow-wrap:anywhere}.knowledge-connections a:hover strong{text-decoration:underline}
+</style>

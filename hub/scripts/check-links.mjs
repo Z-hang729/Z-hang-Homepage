@@ -52,6 +52,8 @@ export async function checkBuiltLinks({ distDir = path.resolve('dist'), basePath
   }
   for (const file of files) {
     const html = await getHtml(file);
+    const pageIDs=[...html.matchAll(/\s+id\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map(match=>decodeHtml(match[1]??match[2]));
+    const seenIDs=new Set();for(const id of pageIDs){if(seenIDs.has(id))errors.push(`${rel(file)}: duplicate id ${id}`);seenIDs.add(id);}
     const links = [];
     for (const match of html.matchAll(/\b(?:href|src|poster|data)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) links.push(decodeHtml(match[1] ?? match[2]));
     for (const match of html.matchAll(/\bsrcset\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)) {
@@ -77,7 +79,7 @@ export async function checkBuiltLinks({ distDir = path.resolve('dist'), basePath
         let anchor;
         try { anchor = decodeURIComponent(target.hash.slice(1)); } catch { errors.push(`${rel(file)}: invalid anchor encoding ${value}`); continue; }
         const targetHtml = await getHtml(resolved);
-        const ids = [...targetHtml.matchAll(/\b(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map(match => decodeHtml(match[1] ?? match[2]));
+        const ids = [...targetHtml.matchAll(/\s+(?:id|name)\s*=\s*(?:"([^"]*)"|'([^']*)')/gi)].map(match => decodeHtml(match[1] ?? match[2]));
         if (!ids.includes(anchor)) errors.push(`${rel(file)}: missing anchor ${value}`);
       }
     }

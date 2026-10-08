@@ -3,6 +3,7 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../files.mjs';
+import {validateRelationsMetadata,knowledgeNodesFromFiles,buildKnowledgeGraph} from '../knowledge.mjs';
 
 // Shared with browser and Worker: intentionally free of Node APIs.
 export const OWNER_LIMITS = Object.freeze({ fileBytes: STORAGE_LIMITS.repositoryBytes, textBytes: 1048576, batchBytes: STORAGE_LIMITS.metadataRequestBytes, files: Number.MAX_SAFE_INTEGER });
@@ -24,9 +25,9 @@ export function assertAllowedPath(input, { action = 'upsert' } = {}) {
   const value = safeRelativePath(input);
   if (/^hub\/src\/data\/files\/[a-z0-9][a-z0-9-]{0,99}\.json$/.test(value)) return value;
   if (/^hub\/src\/data\/(profile|navigation|homepage)\.yaml$/.test(value)) { if (action === 'delete') throw ownerError('Essential data files cannot be deleted.', 'PATH_NOT_ALLOWED'); return value; }
-  const content = value.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/(index\.mdx?|metadata\.yaml|files\/.+\.md)$/);
+  const content = value.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/(index\.mdx?|metadata\.yaml|files\/.+\.mdx?)$/);
   if (content) { assertSlug(content[2]); return value; }
-  const log = value.match(/^hub\/src\/content\/logs\/([^/]+)\/([^/]+)\.md$/);
+  const log = value.match(/^hub\/src\/content\/logs\/([^/]+)\/([^/]+)\.mdx?$/);
   if (log) { assertSlug(log[1]); assertSlug(log[2]); return value; }
   const asset = value.match(/^hub\/public\/uploads\/(images|documents|files|research|notes|projects)\/(.+)$/);
   if (asset) { if (CONTENT_KINDS.includes(asset[1])) assertSlug(asset[2].split('/')[0]); const ext = value.split('.').pop().toLowerCase(); if (!textExtensions.has(ext) && !binaryExtensions.has(ext)) throw ownerError('Unsupported attachment extension. HTML, SVG, executable scripts and video are excluded.', 'PATH_NOT_ALLOWED'); return value; }
@@ -58,6 +59,11 @@ export function validateMetadata(data, { kind, document = false, log = false } =
   if (!document && !log && kind === 'research' && !['Planning', 'In Progress', 'Completed', 'Paused'].includes(data.status)) throw ownerError('Choose a supported research status.');
   if (!document && !log && kind === 'notes') { ['course', 'semester'].forEach(k => text(data[k], k)); if (!['Space Physics', 'Physics', 'Mathematics', 'Computer Science', 'General Education', 'Others'].includes(data.category)) throw ownerError('Choose a supported note category.'); }
   if (log) assertSlug(data.project);
+  if(log&&data.updated!==undefined&&(!validDate(data.updated)||data.updated<data.date))throw ownerError('Log updated date must not precede its date.');
+  if(log&&data.status!==undefined&&!['Planning','In Progress','Completed','Paused'].includes(data.status))throw ownerError('Choose a supported log status.');
+  if(log&&data.kind!==undefined&&!['note','experiment','result'].includes(data.kind))throw ownerError('Choose note, experiment or result for a log.');
+  for(const key of ['summary','sourceFileId'])if(data[key]!==undefined&&typeof data[key]!=='string')throw ownerError(`${key} must be text.`);
+  try{validateRelationsMetadata(data);}catch(error){throw ownerError(error.message,'INVALID_RELATION');}
   for (const k of ['authors', 'collaborators', 'techStack']) if (data[k] !== undefined && (!Array.isArray(data[k]) || data[k].some(v => typeof v !== 'string'))) throw ownerError(`${k} must be a string list.`);
   for (const k of ['attachments', 'links', 'references', 'documents']) if (data[k] !== undefined) { if (!Array.isArray(data[k])) throw ownerError(`${k} must be a list.`); for (const item of data[k]) { if (!item || typeof item !== 'object' || Array.isArray(item)) throw ownerError(`${k} items must be objects.`); text(item.title, `${k} title`); if (k !== 'references') assertSafeURL(item.url, { allowEmpty: false,allowRelative:false }); if (k === 'documents') safeRelativePath(item.path); if(k==='references'){if(item.authors!==undefined && (!Array.isArray(item.authors)||item.authors.some(author=>typeof author!=='string')))throw ownerError('Reference authors must be a string list.');if(item.year!==undefined && !(typeof item.year==='string'||Number.isInteger(item.year)))throw ownerError('Reference year must be an integer or text.');for(const field of ['doi','bibtex'])if(item[field]!==undefined && typeof item[field]!=='string')throw ownerError(`Reference ${field} must be text.`);} } }
   if(kind==='notes' && data.year!==undefined && !(typeof data.year==='string'||Number.isInteger(data.year)))throw ownerError('Course year must be an integer or an academic year string.');
@@ -107,5 +113,7 @@ export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,m
   const resulting=new Set(snapshot.keys()); for(const c of changes) c.action==='delete'?resulting.delete(c.path):resulting.add(c.path); const indexes=new Set(); for(const p of resulting) if(/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/index\.mdx?$/.test(p)) { const id=p.replace(/\.mdx?$/,''); if(indexes.has(id)) throw ownerError('A URL cannot have both index.md and index.mdx.','DUPLICATE_SLUG'); indexes.add(id); }
   for(const c of changes) if(c.action==='upsert' && c.path.startsWith('hub/src/content/logs/')) {const {metadata}=parseFrontmatter(c.content); if(!resulting.has(`hub/src/content/research/${metadata.project}/index.md`) && !resulting.has(`hub/src/content/research/${metadata.project}/index.mdx`)) throw ownerError('Research update must belong to an existing project.');}
   for(const c of changes)if(c.action==='upsert'&&c.path.startsWith('hub/src/data/files/')){const file=JSON.parse(c.content);for(const kind of CONTENT_KINDS)for(const slug of fileRelations(file,kind))if(!resulting.has(`hub/src/content/${kind}/${slug}/index.md`)&&!resulting.has(`hub/src/content/${kind}/${slug}/index.mdx`))throw ownerError('File association must refer to an existing content page.','INVALID_FILE_ASSOCIATION');}
+  const resultingFiles=new Map(snapshot);for(const change of changes){if(change.action==='delete')resultingFiles.delete(change.path);else resultingFiles.set(change.path,change);}
+  try{buildKnowledgeGraph(knowledgeNodesFromFiles(resultingFiles));}catch(error){throw ownerError(error.message,'INVALID_RELATION');}
   return {changes,bytes,paths:changes.map(c=>c.path)};
 }

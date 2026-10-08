@@ -2,7 +2,7 @@
 // the public reader continues to use its existing build-time highlighting.
 export const CODE_LANGUAGES = [
   ['python','Python'], ['idl','IDL'], ['c','C'], ['cpp','C++'], ['java','Java'],
-  ['javascript','JavaScript'], ['typescript','TypeScript'], ['matlab','MATLAB'],
+  ['javascript','JavaScript'], ['typescript','TypeScript'], ['matlab','MATLAB'], ['fortran','Fortran'], ['r','R'], ['julia','Julia'],
   ['latex','LaTeX'], ['json','JSON'], ['bash','Bash'], ['yaml','YAML'], ['text','Plain text'],
 ];
 const loaders = {
@@ -14,12 +14,15 @@ const loaders = {
   javascript: () => import('shiki/langs/javascript.mjs'),
   typescript: () => import('shiki/langs/typescript.mjs'),
   matlab: () => import('shiki/langs/matlab.mjs'),
+  'fortran-free-form': () => import('shiki/langs/fortran-free-form.mjs'),
+  r: () => import('shiki/langs/r.mjs'),
+  julia: () => import('shiki/langs/julia.mjs'),
   latex: () => import('shiki/langs/latex.mjs'),
   json: () => import('shiki/langs/json.mjs'),
   bash: () => import('shiki/langs/bash.mjs'),
   yaml: () => import('shiki/langs/yaml.mjs'),
 };
-const aliases = { py:'python', python3:'python', 'c++':'cpp', cc:'cpp', cxx:'cpp', js:'javascript', ts:'typescript', tex:'latex', sh:'bash', shell:'bash', yml:'yaml' };
+const aliases = { py:'python', python3:'python', 'c++':'cpp', cc:'cpp', cxx:'cpp', js:'javascript', ts:'typescript', tex:'latex', sh:'bash', shell:'bash', yml:'yaml', fortran:'fortran-free-form', f90:'fortran-free-form', f95:'fortran-free-form', jl:'julia' };
 let highlighterPromise;
 const loading = new Map();
 export function normalizeCodeLanguage(language) { const value=String(language||'').toLowerCase(); return Object.hasOwn(aliases,value) ? aliases[value] : value; }

@@ -1,7 +1,8 @@
 import {el,button,inputField,selectField,modal,formAction,structuredRows} from './dom.js';
 import {markdownEditor,renderPreview} from './markdown.js';
 import {imageField} from './images.js';
-import {createEntryChanges,updateEntryChanges,deleteEntryChanges,createLogChanges,updateLogChanges,updateDataChanges,normalizeTags,generateSlug,joinSections} from '../lib/owner/model.mjs';
+import {createEntryChanges,updateEntryChanges,deleteEntryChanges,updateDataChanges,normalizeTags,generateSlug,joinSections} from '../lib/owner/model.mjs';
+import {openResearchLog} from './research-log-editor.js';
 
 const categories=['Space Physics','Physics','Mathematics','Computer Science','General Education','Others'];
 const statuses=['Planning','In Progress','Completed','Paused'];
@@ -55,8 +56,7 @@ export function deleteEntry(ctx,kind,slug) {
   const entry=ctx.model().entries[kind].find(item=>item.slug===slug),removals=deleteEntryChanges(ctx.snapshot(),{kind,slug,confirmation:entry.metadata.title});const surface=modal('Delete '+entry.metadata.title,`This removes ${removals.length} files, including this entry, its attachments, reading pages and research updates. Review the deletion before publishing.`);const confirmation=inputField('Type the exact title to confirm');surface.body.append(confirmation.node,el('details',{},el('summary',{},'Files to remove'),...removals.map(item=>el('p',{class:'owner-muted'},item.path))));formAction(surface,'Delete from draft',async()=>{await ctx.stage(deleteEntryChanges(ctx.snapshot(),{kind,slug,confirmation:confirmation.input.value}));surface.close();});
 }
 export function openLog(ctx,project,path=null) {
-  const entry=path?ctx.model().logs.find(item=>item.path===path):null,original=entry?.metadata||{title:'',date:today(),tags:[],demo:false};const surface=modal(path?'Edit research update':'Add research update','Short updates belong to the selected research project.');const basic=fields(surface,[['title','Title'],['date','Date',{type:'date'}],['tags','Tags, separated by commas'],['description','Summary',{multiline:true}]],{...original,tags:original.tags.join(', ')});const editor=markdownEditor(entry?.body||'',ctx.base);const attachments=structuredRows('Attachments',original.attachments||[],[{key:'title',label:'Title'},{key:'url',label:'URL'},{key:'type',label:'Type'}]);surface.body.append(editor.node,attachments.node);formAction(surface,'Save update to draft',async()=>{const metadata={...original,...Object.fromEntries(Object.entries(basic).map(([key,input])=>[key,input.value.trim()]))};metadata.tags=normalizeTags(metadata.tags);metadata.attachments=attachments.value().filter(item=>item.title||item.url);const changes=path?updateLogChanges(ctx.snapshot(),{path,metadata,body:editor.value()}):createLogChanges(ctx.snapshot(),{project,metadata,body:editor.value()});await ctx.stage(changes);surface.close();});
-  if(path)surface.actions.prepend(button('Delete update',()=>{const deletion=modal('Delete research update','This deletes only this update from the draft.');const confirmation=inputField('Type the exact update title');deletion.body.append(confirmation.node);formAction(deletion,'Confirm deletion',async()=>{if(confirmation.input.value!==original.title)throw new Error('The title must match exactly.');const file=ctx.snapshot().files.find(item=>item.path===path);await ctx.stage([{path,action:'delete',expectedSha:file.sha}]);deletion.close();surface.close();});}));
+  return openResearchLog(ctx,{project,path});
 }
 export function openProfile(ctx,focus=null) {
   const source=ctx.model().profile,surface=modal('Edit profile','Your homepage, About page, and contact links use this same profile.');

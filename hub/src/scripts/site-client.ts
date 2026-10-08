@@ -1,3 +1,5 @@
+import {installAcademicFigures} from './academic-reader.js';
+installAcademicFigures();
 const base = import.meta.env.BASE_URL;
 const toast = (message: string) => {
   const el = document.querySelector("#toast");
