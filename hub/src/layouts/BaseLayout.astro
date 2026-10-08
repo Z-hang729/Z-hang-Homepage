@@ -11,7 +11,7 @@ const structured = { '@context': 'https://schema.org', '@type': 'Person', name: 
   affiliation: { '@type': 'CollegeOrUniversity', name: profile.university }, url: new URL(url('/'), Astro.site).href };
 const ownerBackend = import.meta.env.PUBLIC_OWNER_BACKEND_URL || '';
 const mainNavigation = navigation.some(item => /^\/(?:files|library)\/?$/.test(item.href)) ? navigation : [...navigation, { label: 'Files', href: '/files/' }];
-const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':current.startsWith('/research/')?'Research':current.startsWith('/notes/')?'Notes':current.startsWith('/projects/')?'Projects':current.startsWith('/files/')?'Files':'Website';
+const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':current.startsWith('/research/')?'Research':current.startsWith('/notes/')?'Notes':current.startsWith('/projects/')?'Projects':current.startsWith('/files/')?'Files':current.startsWith('/figures/')?'Figures':current.startsWith('/references/')?'References':current.startsWith('/packages/')?'Research packages':current.startsWith('/activity/')?'Activity':current.startsWith('/cv/')?'CV':'Website';
 ---
 <!doctype html>
 <html lang="en" data-theme="light">
@@ -50,7 +50,7 @@ const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':curre
     <main id="main" data-pagefind-body={noindex?undefined:true} data-pagefind-ignore={noindex?'all':undefined} data-pagefind-filter={noindex?undefined:`type:${searchType}`} data-pagefind-meta={noindex?undefined:`type:${searchType}`}><slot/></main>
     <footer class="site-footer" data-pagefind-ignore>
       <div class="footer-top"><a class="footer-name" href={url('/')}><span data-owner-field="displayName">{profile.displayName}</span><span>.</span></a><p data-owner-field="tagline">{profile.tagline}</p><a class="back-top" href="#main">Back to top ↑</a></div>
-      <div class="footer-bottom"><span><span data-owner-field="degree">{profile.degree}</span> × <span data-owner-field="secondDegreeShort">{profile.secondDegreeShort}</span></span><div><a href={url('/rss.xml')}>RSS</a><a href={url('/publications/')}>Publications</a><a href={url('/changelog/')}>Changelog</a>{siteConfig.repo && <a href={siteConfig.repo}>Source on GitHub ↗</a>}<a href={url('/owner/')} data-owner-login>Owner sign in</a></div></div>
+      <div class="footer-bottom"><span><span data-owner-field="degree">{profile.degree}</span> × <span data-owner-field="secondDegreeShort">{profile.secondDegreeShort}</span></span><div><a href={url('/academic/')}>Academic publishing</a><a href={url('/rss.xml')}>RSS</a><a href={url('/publications/')}>Publications</a><a href={url('/changelog/')}>Changelog</a>{siteConfig.repo && <a href={siteConfig.repo}>Source on GitHub ↗</a>}<a href={url('/owner/')} data-owner-login>Owner sign in</a></div></div>
     </footer>
     <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title" data-pagefind-ignore><div class="search-heading"><div><p class="eyebrow">ACROSS THE GARDEN</p><h2 id="search-title">Find an idea.</h2></div><button class="icon-button" data-search-close aria-label="Close search">×</button></div><div id="global-search"></div><p class="search-hint" id="search-hint">Search research, notes, projects, and tags. Press Esc to close.</p></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>

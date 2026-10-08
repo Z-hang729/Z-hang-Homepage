@@ -493,7 +493,7 @@ export class StorageService {
     const destructiveKeys = new Set(candidates.filter(([, asset]) => ['github-release', 'external-object-storage'].includes(asset.provider)).map(([, asset]) => asset.file.storageKey));
     if (destructiveKeys.size) {
       if(explicit){
-        const content=tree.filter(item=>item.type==='blob'&&/^hub\/src\/content\/(research|notes|projects|logs)\/.+\.mdx?$/.test(item.path));
+        const content=tree.filter(item=>item.type==='blob'&&(/^hub\/src\/content\/(research|notes|projects|logs)\/.+\.mdx?$/.test(item.path)||/^hub\/src\/data\/(figures|references|packages)\/[^/]+\.json$/.test(item.path)));
         for(let offset=0;offset<content.length;offset+=6){
           const files=await Promise.all(content.slice(offset,offset+6).map(async item=>{if(item.size>METADATA_BYTES)fail('FILE_METADATA_UNAVAILABLE','无法安全核验笔记和日志中的文件引用。',409);return {path:item.path,content:new TextDecoder().decode(fromBase64((await github.blob(item.sha)).content))};}));
           if(knowledgeNodesFromFiles(files).some(node=>referencesFile(node,id)))fail('FILE_KNOWLEDGE_REFERENCE','日志或笔记仍引用这个文件。请先移除这些关联并发布，再删除原始附件。',409);

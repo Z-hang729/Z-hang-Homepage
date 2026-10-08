@@ -1,0 +1,34 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import KnowledgeConnections from '../../components/KnowledgeConnections.astro';
+import {readAcademicRecords} from '../../lib/academic-records.mjs';
+import {formatCitation,exportBibTeX,authorLabel,REFERENCE_TYPE_LABELS,safeReferenceURL} from '../../lib/bibliography.mjs';
+import {url} from '../../lib/site';
+import '../../styles/academic-publishing.css';
+export function getStaticPaths(){return readAcademicRecords('references',{publicOnly:true}).map(record=>({params:{slug:record.id.slice('reference:'.length)},props:{record}}));}
+const {record}=Astro.props;
+const apa=formatCitation(record,{style:'apa'}),ieee=formatCitation(record,{style:'ieee'}),bibtex=exportBibTeX([record]);
+let sourceURL='';try{sourceURL=safeReferenceURL(record.provenance?.sourceURL||'');}catch{}
+---
+<BaseLayout title={record.title||record.citationKey} description={record.abstract||'Reference metadata, formatted citations, and connected research.'}>
+  <article class="pub-shell" data-reference-detail data-reference-id={record.id}>
+    <a class="back-link" href={url('/references/')}>← Academic bibliography</a>
+    <header class="pub-header"><p class="eyebrow">{REFERENCE_TYPE_LABELS[record.type]||'REFERENCE'}</p><h1>{record.title||'Title not supplied'}</h1><p>{record.authors?.length?record.authors.map(authorLabel).join('; '):'Authors not supplied'}</p><div class="pub-meta"><span>{record.year||'Year not supplied'}</span><code>{record.citationKey}</code>{(record.tags||[]).map((tag:string)=><span class="pub-badge">{tag}</span>)}</div></header>
+    <div class="pub-actions"><a class="button" href={url('/references/'+record.id.slice('reference:'.length)+'.bib')} download={record.citationKey+'.bib'}>Download BibTeX ↓</a>{record.doi&&<a class="button" href={'https://doi.org/'+encodeURIComponent(record.doi)} target="_blank" rel="noopener noreferrer">Open DOI ↗</a>}{record.url&&<a href={record.url} target="_blank" rel="noopener noreferrer">Source website ↗</a>}<button type="button" class="button" data-reference-copy-link>Copy link</button></div>
+    <section class="pub-section"><h2>Bibliographic metadata</h2><dl class="reference-metadata">{[['Type',REFERENCE_TYPE_LABELS[record.type]],['Year',record.year],['Journal / container',record.journal],['Publisher',record.publisher],['Volume',record.volume],['Issue',record.issue],['Pages',record.pages],['DOI',record.doi],['arXiv',record.arxiv]].filter(([,value])=>value).map(([label,value])=><div><dt>{label}</dt><dd>{value}</dd></div>)}</dl></section>
+    {record.abstract&&<section class="pub-section"><h2>Abstract</h2><p class="reference-abstract">{record.abstract}</p></section>}
+    <section class="pub-section" aria-label="Citation formats"><h2>Cite this reference</h2><p class="pub-meta">APA and IEEE are generated with the CSL processor. Use the citation key <code>[@{record.citationKey}]</code> in research and notes.</p>
+      {[['APA',apa],['IEEE',ieee],['BibTeX',bibtex]].map(([style,text])=><section class="reference-format"><div class="pub-actions"><h3>{style}</h3><button type="button" class="button" data-reference-copy={style}>Copy {style}</button></div><pre class="pub-code" data-reference-format={style}>{text}</pre></section>)}
+      <p role="status" aria-live="polite" data-reference-copy-status></p>
+    </section>
+    {record.provenance&&<section class="pub-section"><h2>Metadata provenance</h2><p>{record.provenance.source||'Owner maintained'}{sourceURL&&<> · <a href={sourceURL} target="_blank" rel="noopener noreferrer">Metadata source ↗</a></>}</p>{record.provenance.lastVerified&&<p class="pub-meta">Last verified: {record.provenance.lastVerified}</p>}{record.provenance.ownerEditedFields?.length>0&&<p class="pub-meta">Owner edited fields: {record.provenance.ownerEditedFields.join(', ')}</p>}</section>}
+    <KnowledgeConnections id={record.id}/>
+  </article>
+</BaseLayout>
+<script>
+  const root=document.querySelector('[data-reference-detail]');
+  for(const button of root?.querySelectorAll<HTMLButtonElement>('[data-reference-copy],[data-reference-copy-link]')||[]){button.addEventListener('click',async()=>{const status=root?.querySelector('[data-reference-copy-status]');try{const style=button.dataset.referenceCopy,text=style?root?.querySelector(`[data-reference-format="${style}"]`)?.textContent||'':location.href;await navigator.clipboard.writeText(text);if(status)status.textContent=style?`${style} citation copied.`:'Reference link copied.';}catch{if(status)status.textContent='Copy is unavailable in this browser. Select and copy the citation text below.';}});}
+</script>
+<style>
+  .reference-metadata{margin:0}.reference-metadata>div{display:grid;grid-template-columns:minmax(8rem,1fr) 3fr;gap:1.2rem;padding:.7rem 0;border-bottom:1px solid var(--border)}.reference-metadata dt{color:var(--muted);font-size:.85rem}.reference-metadata dd{margin:0;overflow-wrap:anywhere}.reference-abstract{white-space:pre-line;line-height:1.8}.reference-format{margin-top:1.5rem}.reference-format h3{margin:0}.reference-format pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:.85rem}.pub-header h1{overflow-wrap:anywhere}@media(max-width:560px){.reference-metadata>div{grid-template-columns:1fr;gap:.3rem}}
+</style>

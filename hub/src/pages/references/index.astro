@@ -1,0 +1,46 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {readAcademicRecords} from '../../lib/academic-records.mjs';
+import {formatCitation,authorLabel,REFERENCE_TYPE_LABELS} from '../../lib/bibliography.mjs';
+import {url} from '../../lib/site';
+import '../../styles/academic-publishing.css';
+const references=readAcademicRecords('references',{publicOnly:true}).sort((a,b)=>(b.year||0)-(a.year||0)||(a.title||'').localeCompare(b.title||''));
+const tags=[...new Set(references.flatMap(record=>record.tags||[]))].sort();
+const years=[...new Set(references.map(record=>record.year).filter(Boolean))].sort((a,b)=>b-a);
+const types=[...new Set(references.map(record=>record.type))].sort();
+---
+<BaseLayout title="Academic bibliography" description="A shared reference library for research, notes, projects, and reproducibility packages.">
+  <div class="pub-shell" data-reference-catalog>
+    <header class="pub-header"><p class="eyebrow">SCHOLARLY SOURCES</p><h1>Academic bibliography</h1><p>A shared literature library for research, notes, projects, and reproducibility packages.</p><p class="pub-meta">References are literature records. Personal publications are maintained separately.</p></header>
+    <nav class="pub-nav" aria-label="Academic publishing"><a href={url('/figures/')}>Figures</a><a href={url('/references/')} aria-current="page">References</a><a href={url('/packages/')}>Research packages</a><a href={url('/activity/')}>Activity</a><a href={url('/cv/')}>CV</a></nav>
+    {references.length>0?<>
+      <div class="pub-actions"><a class="button" href={url('/references.bib')} download="references.bib">Export public bibliography · BibTeX ↓</a><span class="pub-meta" data-reference-count role="status">{references.length} references</span></div>
+      <form class="pub-filters" onsubmit="return false" role="search" aria-label="Filter references">
+        <label>Search<input type="search" data-reference-search placeholder="Title, author, DOI, key, or tag"/></label>
+        <label>Type<select data-reference-type><option value="">All types</option>{types.map(type=><option value={type}>{REFERENCE_TYPE_LABELS[type]||type}</option>)}</select></label>
+        <label>Year<select data-reference-year><option value="">All years</option>{years.map(year=><option value={year}>{year}</option>)}</select></label>
+        <label>Tag<select data-reference-tag><option value="">All tags</option>{tags.map(tag=><option value={tag}>{tag}</option>)}</select></label>
+        <label>Sort<select data-reference-sort><option value="year-desc">Newest first</option><option value="year-asc">Oldest first</option><option value="title">Title A–Z</option><option value="author">Author A–Z</option></select></label>
+        <label>Citation style<select data-reference-style><option value="apa">APA</option><option value="ieee">IEEE</option></select></label>
+      </form>
+      <div class="reference-results" data-reference-results>{references.map(record=><article class="pub-card reference-card" data-reference-card data-title={(record.title||'').toLocaleLowerCase()} data-author={(record.authors||[]).map(authorLabel).join(' ').toLocaleLowerCase()} data-year={record.year||''} data-type={record.type} data-tags={JSON.stringify(record.tags||[])} data-search={[record.title,record.citationKey,record.doi,...(record.tags||[]),...(record.authors||[]).map(authorLabel)].join(' ').toLocaleLowerCase()}>
+        <div class="pub-meta"><span>{REFERENCE_TYPE_LABELS[record.type]||'Other'}</span><span>{record.year||'Year not supplied'}</span><code>{record.citationKey}</code></div>
+        <h2><a href={url('/references/'+record.id.slice('reference:'.length)+'/')}>{record.title||'Title not supplied'}</a></h2>
+        <p class="reference-citation" data-citation-style="apa">{formatCitation(record,{style:'apa'})}</p><p class="reference-citation" data-citation-style="ieee" hidden>{formatCitation(record,{style:'ieee'})}</p>
+        {(record.tags||[]).length>0&&<p class="pub-meta">{record.tags.map((tag:string)=><span class="pub-badge">{tag}</span>)}</p>}
+        <div class="pub-actions"><a href={url('/references/'+record.id.slice('reference:'.length)+'/')}>Reference details & connections →</a><a href={url('/references/'+record.id.slice('reference:'.length)+'.bib')} download={record.citationKey+'.bib'}>BibTeX ↓</a>{record.doi&&<a href={'https://doi.org/'+encodeURIComponent(record.doi)} target="_blank" rel="noopener noreferrer">DOI ↗</a>}</div>
+      </article>)}</div>
+      <p class="pub-empty" data-reference-no-results hidden>No references match these filters.</p>
+    </>:<section class="pub-empty"><h2>A growing reference library</h2><p>References will appear here when real literature records are reviewed and published.</p><a href={url('/owner/')}>Owner workspace →</a></section>}
+  </div>
+</BaseLayout>
+<script>
+  const root=document.querySelector('[data-reference-catalog]');
+  if(root){const cards=Array.from(root.querySelectorAll<HTMLElement>('[data-reference-card]')),controls={search:root.querySelector<HTMLInputElement>('[data-reference-search]'),type:root.querySelector<HTMLSelectElement>('[data-reference-type]'),year:root.querySelector<HTMLSelectElement>('[data-reference-year]'),tag:root.querySelector<HTMLSelectElement>('[data-reference-tag]'),sort:root.querySelector<HTMLSelectElement>('[data-reference-sort]'),style:root.querySelector<HTMLSelectElement>('[data-reference-style]')};
+    function filter(){let count=0;for(const card of cards){const visible=(!controls.search?.value||card.dataset.search?.includes(controls.search.value.trim().toLocaleLowerCase()))&&(!controls.type?.value||card.dataset.type===controls.type.value)&&(!controls.year?.value||card.dataset.year===controls.year.value)&&(!controls.tag?.value||JSON.parse(card.dataset.tags||'[]').includes(controls.tag.value));card.hidden=!visible;if(visible)count++;for(const citation of card.querySelectorAll<HTMLElement>('[data-citation-style]'))citation.hidden=citation.dataset.citationStyle!==controls.style?.value;}const sorted=[...cards].sort((a,b)=>{const mode=controls.sort?.value;return mode==='title'||mode==='author'?String(a.dataset[mode]||'').localeCompare(String(b.dataset[mode]||'')):mode==='year-asc'?Number(a.dataset.year||9999)-Number(b.dataset.year||9999):Number(b.dataset.year||0)-Number(a.dataset.year||0);});const results=root?.querySelector('[data-reference-results]');for(const card of sorted)results?.append(card);const counter=root?.querySelector('[data-reference-count]');if(counter)counter.textContent=`${count} ${count===1?'reference':'references'}`;const empty=root?.querySelector<HTMLElement>('[data-reference-no-results]');if(empty)empty.hidden=count>0;}
+    for(const control of Object.values(controls))control?.addEventListener('input',filter);
+  }
+</script>
+<style>
+  .reference-results{display:grid;gap:1rem}.reference-card h2{font-size:1.15rem;margin:.8rem 0}.reference-card h2 a{text-decoration:none}.reference-card h2 a:hover{text-decoration:underline}.reference-citation{font-size:.95rem;line-height:1.75;overflow-wrap:anywhere}.reference-card code{font-size:.75rem}.reference-card[hidden],.reference-citation[hidden]{display:none}
+</style>

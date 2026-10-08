@@ -1,0 +1,8 @@
+---
+import ResearchPackageDetail from '../../../components/ResearchPackageDetail.astro';
+import {readAcademicRecords} from '../../../lib/academic-records.mjs';
+import {academicSlug} from '../../../lib/figures.mjs';
+export function getStaticPaths(){return readAcademicRecords('packages',{publicOnly:true}).map(record=>({params:{slug:academicSlug(record)},props:{record}}));}
+interface Props {record:any;}
+---
+<ResearchPackageDetail record={Astro.props.record}/>

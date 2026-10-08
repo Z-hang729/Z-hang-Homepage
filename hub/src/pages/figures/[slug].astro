@@ -1,0 +1,35 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import KnowledgeConnections from '../../components/KnowledgeConnections.astro';
+import {readAcademicRecords} from '../../lib/academic-records.mjs';
+import {normalizeFigure,academicSlug,figurePath} from '../../lib/figures.mjs';
+import {getFiles} from '../../lib/file-records';
+import {formatFileSize,originalDownloadURL,stableFilePath} from '../../lib/files.mjs';
+import {renderFileDescription} from '../../file-preview/description.mjs';
+import {url,formatDate} from '../../lib/site';
+import '../../styles/academic-publishing.css';
+export function getStaticPaths(){return readAcademicRecords('figures',{publicOnly:true}).map(figure=>({params:{slug:academicSlug(figure)},props:{figure}}));}
+interface Props {figure:any;}
+const files=getFiles(),figure=normalizeFigure(Astro.props.figure,{files}),original=files.find(file=>file.id===figure.fileId)!;
+const preview={...original,displayName:figure.altText},caption=await renderFileDescription(figure.caption,import.meta.env.BASE_URL),description=await renderFileDescription(figure.description,import.meta.env.BASE_URL);
+---
+<BaseLayout title={figure.title} description={figure.description||figure.altText}>
+ <div class="pub-shell" data-owner-figure-id={figure.id} data-file-detail data-file-preview={JSON.stringify(preview)} data-figure-detail data-preview-is-original={!original.previewUrl||original.previewUrl===original.downloadUrl?'true':'false'} data-recorded-dimensions={original.dimensions?'true':'false'}>
+  <nav class="pub-nav" aria-label="Breadcrumb"><a href={url('/figures/')}>Figures</a><a href={url(stableFilePath(original.id))}>Original Library record</a></nav>
+  <header class="pub-header"><p class="eyebrow">{figure.category}</p><h1>{figure.title}</h1><p class="pub-meta"><time datetime={figure.date}>{formatDate(figure.date)}</time> · {figure.authors.length?figure.authors.join(', '):'Authors unspecified'}</p></header>
+  <div class="pub-actions" data-pagefind-ignore><button type="button" class="button-secondary" data-preview-load>Open scientific preview</button><button type="button" class="button-secondary" data-preview-fullscreen hidden>Fullscreen</button><a class="button-secondary" href={url(originalDownloadURL(original))} download={original.originalName}>Download original ↓</a><button type="button" class="button-secondary" data-copy-figure={url(figurePath(figure))}>Copy figure link</button><button type="button" class="button-secondary" data-figure-background aria-pressed="false">Dark preview background</button></div>
+  <p data-file-status role="status" aria-live="polite"/>
+  <figure class="scientific-figure"><div class="file-preview prose" data-preview-host data-pagefind-ignore/>{original.previewType==='image'&&<img class="figure-poster" data-figure-poster src={url(original.previewUrl||original.downloadUrl)} alt={figure.altText} decoding="async" referrerpolicy="no-referrer"/>}<figcaption class="pub-content prose" set:html={caption}/></figure>
+  {figure.displayTransformation&&<p class="pub-card"><strong>Display transformation:</strong> {figure.displayTransformation} Original scientific pixels are preserved in the downloadable source file.</p>}
+  {figure.description&&<section class="pub-section pub-content prose" set:html={description}/>}
+  <section class="pub-section"><h2>Provenance &amp; original</h2><dl class="figure-metadata"><dt>Source</dt><dd>{figure.source}</dd><dt>License</dt><dd>{figure.license}</dd><dt>Authors</dt><dd>{figure.authors.length?figure.authors.join(', '):'Unspecified'}</dd><dt>Original filename</dt><dd>{original.originalName}</dd><dt>Original resolution</dt><dd data-original-resolution>{Array.isArray(original.dimensions)?original.dimensions.join(' × '):original.dimensions||'Not recorded. A separate preview may have different dimensions.'}</dd><dt>Loaded preview</dt><dd data-preview-resolution>Open the image preview to inspect its displayed dimensions.</dd><dt>File size</dt><dd>{formatFileSize(original.size)}</dd><dt>Updated</dt><dd><time datetime={figure.updated}>{formatDate(figure.updated)}</time></dd><dt>SHA-256</dt><dd><code>{original.sha256||'Not verified — checksum not recorded'}</code></dd></dl></section>
+  {figure.tags.length>0&&<p class="pub-meta">{figure.tags.join(' · ')}</p>}
+  <KnowledgeConnections id={figure.id}/>
+ </div>
+</BaseLayout>
+<script>
+ import '../../file-preview/preview.js';
+ const root=document.querySelector<HTMLElement>('[data-figure-detail]');
+ if(root){const host=root.querySelector<HTMLElement>('[data-preview-host]')!,poster=root.querySelector<HTMLImageElement>('[data-figure-poster]');const dimensions=(image:HTMLImageElement)=>{if(!image.naturalWidth)return;const value=`${image.naturalWidth} × ${image.naturalHeight} pixels`;root.querySelector('[data-preview-resolution]')!.textContent=value;if(root.dataset.previewIsOriginal==='true'&&root.dataset.recordedDimensions!=='true')root.querySelector('[data-original-resolution]')!.textContent=value;};root.addEventListener('load',event=>{if(event.target instanceof HTMLImageElement){dimensions(event.target);if(host.contains(event.target))poster?.setAttribute('hidden','');}},true);if(poster?.complete)dimensions(poster);root.querySelector<HTMLButtonElement>('[data-copy-figure]')?.addEventListener('click',async event=>{try{await navigator.clipboard.writeText(new URL((event.currentTarget as HTMLElement).dataset.copyFigure!,location.origin).href);root.querySelector('[data-file-status]')!.textContent='Figure link copied.';}catch{root.querySelector('[data-file-status]')!.textContent='Copy unavailable. Copy the page address from your browser.';}});root.querySelector<HTMLButtonElement>('[data-figure-background]')?.addEventListener('click',event=>{const button=event.currentTarget as HTMLButtonElement,dark=button.getAttribute('aria-pressed')!=='true';button.setAttribute('aria-pressed',String(dark));root.dataset.previewBackground=dark?'dark':'light';});}
+</script>
+<style>.scientific-figure{margin:1.5rem 0}.figure-poster{display:block;width:auto;max-width:100%;max-height:75vh;margin:auto;object-fit:contain}.figure-poster[hidden]{display:none}.scientific-figure figcaption{margin:1.2rem 0}.file-preview{overflow:auto;max-width:100%;background:var(--surface)}[data-preview-background=dark] .file-preview,[data-preview-background=dark] .figure-poster{background:#111}.file-preview:fullscreen{padding:1rem;width:100%;height:100%;background:var(--surface)}.file-preview:empty{display:none}.figure-metadata{display:grid;grid-template-columns:160px minmax(0,1fr);gap:.8rem}.figure-metadata dd{margin:0;overflow-wrap:anywhere}.figure-metadata dt{color:var(--muted)}@media(max-width:600px){.figure-metadata{grid-template-columns:110px minmax(0,1fr);font-size:.85rem}}</style>

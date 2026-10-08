@@ -1,0 +1,9 @@
+---
+import ResearchPackageDetail from '../../../../../components/ResearchPackageDetail.astro';
+import {readAcademicRecords} from '../../../../../lib/academic-records.mjs';
+import {academicSlug,isPublishedAcademic} from '../../../../../lib/figures.mjs';
+import {packageVersions} from '../../../../../lib/research-packages.mjs';
+export function getStaticPaths(){return readAcademicRecords('packages',{publicOnly:true}).flatMap(current=>packageVersions(current).filter(isPublishedAcademic).map(record=>({params:{slug:academicSlug(record),version:record.version},props:{record,current}})));}
+interface Props {record:any;current:any;}
+---
+<ResearchPackageDetail record={Astro.props.record} current={Astro.props.current} versioned/>

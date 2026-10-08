@@ -5,6 +5,8 @@ import { OwnerService, configuration } from '../owner-backend/service.mjs';
 import { presignR2, STORAGE_LIMITS } from '../owner-backend/storage.mjs';
 import { digest, seal, fromBase64, toBase64 } from '../owner-backend/crypto.mjs';
 import { serializeContentDocument } from '../src/lib/owner/model.mjs';
+import { normalizeFigure } from '../src/lib/figures.mjs';
+import { normalizePackage } from '../src/lib/research-packages.mjs';
 
 const origin = 'https://owner.example.com';
 const site = 'https://z-hang729.github.io';
@@ -156,6 +158,21 @@ async function deleteEnvelope(f,file,overrides={}){
 }
 
 const contentMetadata={title:'Existing fixture',description:'Owner-authored fixture.',date:'2026-10-01',updated:'2026-10-02',tags:[]};
+const academicDeleteCases=[
+ ['published Figure original','hub/src/data/figures/protected-observation.json',file=>normalizeFigure({id:'figure:protected-observation',title:'Protected observation fixture',date:'2026-10-02',fileId:file.id,caption:'Fixture caption only.',altText:'Fixture observation.',visibility:'public',publicationStatus:'published'})],
+ ['published Package historical input','hub/src/data/packages/protected-history.json',file=>normalizePackage({id:'package:protected-history',title:'Protected version fixture',date:'2026-10-02',version:'2.0.0',visibility:'public',publicationStatus:'published',inputs:[],history:[normalizePackage({id:'package:protected-history',title:'Original version fixture',date:'2026-10-01',version:'1.0.0',visibility:'public',publicationStatus:'published',inputs:[{fileId:file.id,sha256:file.sha256,size:file.size,originalName:file.originalName}]})]})],
+];
+for(const [name,path,record]of academicDeleteCases)test(`Provider-first delete blocks ${name} before adapter byte deletion`,async()=>{
+ const f=await fixture(),upload=await f.start({name:'observation.fits',relativePath:'observations/observation.fits'});await f.upload(upload);const file=await f.complete(upload);await f.publish(file);
+ const snapshot=await(await f.rpc('snapshot')).json(),academic=record(file),published=await f.rpc('publish',{expectedHead:snapshot.head,idempotencyKey:crypto.randomUUID(),changes:[{path,action:'upsert',expectedSha:null,encoding:'utf8',content:JSON.stringify(academic)}]});
+ assert.equal(published.status,200,await published.clone().text());assert.ok(f.source.has(path));
+ const params=await deleteEnvelope(f,file),providerDeletes=()=>f.calls.filter(call=>call.method==='DELETE'&&/\/releases\/assets\/\d+$/.test(call.path));
+ const blocked=await f.rpc('storage-delete',params);assert.equal(blocked.status,409,await blocked.clone().text());assert.equal((await blocked.json()).error.code,'FILE_KNOWLEDGE_REFERENCE');
+ assert.equal(providerDeletes().length,0,'Scientific metadata guard must run before the storage adapter can delete provider bytes');assert.equal(f.assets.size,1);assert.ok(f.source.has(`hub/src/data/files/${file.id}.json`));assert.ok((await f.store.get(`file:${file.id}`)).current);assert.equal([...f.store.values.keys()].some(key=>key.startsWith('file-delete-operation:')),false,'A rejected deletion must not persist a provider deletion operation');
+ const current=await(await f.rpc('snapshot')).json(),removed=await f.rpc('publish',{expectedHead:current.head,idempotencyKey:crypto.randomUUID(),changes:[{path,action:'delete',expectedSha:current.files.find(entry=>entry.path===path).sha}]});assert.equal(removed.status,200,await removed.clone().text());
+ assert.equal((await f.rpc('storage-delete',params)).status,409,'A stale confirmation cannot bypass the metadata removal review');assert.equal(providerDeletes().length,0);
+ const deleted=await f.rpc('storage-delete',await deleteEnvelope(f,file));assert.equal(deleted.status,200,await deleted.clone().text());assert.equal((await deleted.json()).providerDeleted,true);assert.equal(providerDeletes().length,1);assert.equal(f.assets.size,0);assert.ok(f.source.has(`hub/src/data/files/${file.id}.json`),'Library metadata removal remains a separate confirmed publication');
+});
 const knowledgeDeleteCases=[
   ['log relatedFiles','hub/src/content/logs/study/update.md',id=>({metadata:{...contentMetadata,project:'study',relatedFiles:[id]},body:'Log body.'})],
   ['chapter relatedFiles','hub/src/content/notes/course/files/topic.md',id=>({metadata:{...contentMetadata,relatedFiles:[id]},body:'Chapter body.'})],
@@ -570,6 +587,26 @@ test('Exact two-repository configuration is opt-in and uses only that assets rep
   assert.match(file.downloadUrl, /Z-hang-Homepage-Assets\/releases\/download/);
   assert.throws(() => configuration({ ...f.config, ASSETS_REPO_NAME: 'other' }));
   assert.equal(f.calls.filter(call => call.path.includes('/releases')).every(call => call.path.includes('/Z-hang-Homepage-Assets/')), true);
+});
+
+test('Academic drafts are rejected before Git mutation while reviewed published records commit', async () => {
+  const f = await fixture();
+  const path = 'hub/src/data/packages/local-draft.json';
+  const record = normalizePackage({id:'package:local-draft',title:'Local research draft',description:'Backend fixture only.',date:'2026-10-02',publicationStatus:'draft',visibility:'unlisted'});
+  const publish = async value => f.rpc('publish', {expectedHead:(await (await f.rpc('snapshot')).json()).head,idempotencyKey:crypto.randomUUID(),changes:[{path,action:'upsert',expectedSha:null,encoding:'utf8',content:JSON.stringify(value)}]});
+  const rejected = await publish(record);
+  assert.equal(rejected.status,409);
+  assert.match(await rejected.text(),/UNPUBLISHED_ACADEMIC_DRAFT/);
+  assert.equal(f.mutations(),0);
+  assert.equal(f.source.has(path),false);
+  const published = {...record,publicationStatus:'published',visibility:'public'};
+  const hiddenDraft = {...published,history:[{...record,version:'0.9.0',history:[]}]};
+  assert.equal((await publish(hiddenDraft)).status,409);
+  assert.equal(f.mutations(),0);
+  const accepted = await publish(published);
+  assert.equal(accepted.status,200,await accepted.clone().text());
+  assert.equal(f.mutations(),1);
+  assert.equal(JSON.parse(f.source.get(path)).publicationStatus,'published');
 });
 
 test('Session cleanup scans beyond the first 1000 records without deleting active files', async () => {

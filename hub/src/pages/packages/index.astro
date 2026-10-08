@@ -1,0 +1,18 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import {readAcademicRecords} from '../../lib/academic-records.mjs';
+import {normalizePackage,packagePath,PACKAGE_FILE_ROLES,REPRODUCIBILITY_STATUSES} from '../../lib/research-packages.mjs';
+import {getFiles} from '../../lib/file-records';
+import {url,formatDate} from '../../lib/site';
+import '../../styles/academic-publishing.css';
+const files=getFiles(),packages=readAcademicRecords('packages',{publicOnly:true}).map(record=>normalizePackage(record,{files})).sort((a,b)=>b.date.localeCompare(a.date)||a.id.localeCompare(b.id));
+---
+<BaseLayout title="Research Reproducibility Packages" description="Research inputs, source code, environment, procedures and outputs linked in versioned documentation.">
+ <div class="pub-shell" data-owner-packages data-packages-index><header class="pub-header"><p class="eyebrow">RESEARCH REPRODUCIBILITY</p><h1>Research packages</h1><p>Versioned records connecting input data, source code, environment, procedures and results. Reproducibility claims include their actual verification evidence.</p><nav class="pub-nav" aria-label="Academic publishing"><a href={url('/research/')}>Research</a><a href={url('/files/')}>File Library</a><a href={url('/figures/')}>Figures</a><a href={url('/references/')}>Bibliography</a></nav></header>
+  {packages.length===0?<section class="pub-empty"><h2>Experiment records as research progresses</h2><p>Published research packages will appear here when real experiments are ready to share.</p><p>Packages document existing files and procedures. They do not run experiments or automatically claim reproducibility.</p></section>:<><form class="pub-filters" role="search" onsubmit="return false"><label>Search <input type="search" name="query" placeholder="Title, description or tag"/></label><label>Status <select name="status"><option value="">All statuses</option>{REPRODUCIBILITY_STATUSES.map(status=><option value={status}>{status}</option>)}</select></label></form><p class="pub-count" data-package-count role="status" aria-live="polite">{packages.length} packages</p><div class="pub-grid">{packages.map(record=><article class="pub-card" data-package-card data-package-status={record.status} data-package-search={[record.title,record.description,...record.tags].join(' ').toLocaleLowerCase()}><p class="pub-meta"><time datetime={record.date}>{formatDate(record.date)}</time> · v{record.version}</p><h2><a href={url(packagePath(record))}>{record.title}</a></h2><p>{record.description}</p><p><span class="pub-badge">{record.status}</span></p><p class="pub-meta">{PACKAGE_FILE_ROLES.reduce((count,role)=>count+record[role].length,0)} referenced files · {record.figures.length} figures</p><a href={url(packagePath(record))}>Open package →</a></article>)}</div><p class="pub-empty" data-package-no-results hidden>No research packages match your search.</p></>}
+ </div>
+</BaseLayout>
+<script>
+ const root=document.querySelector('[data-packages-index]'),form=root?.querySelector('form');if(root&&form){const cards=[...root.querySelectorAll<HTMLElement>('[data-package-card]')];form.addEventListener('input',()=>{const values=new FormData(form),query=String(values.get('query')||'').toLocaleLowerCase().trim(),status=String(values.get('status')||'');let count=0;cards.forEach(card=>{card.hidden=Boolean(query&&!card.dataset.packageSearch!.includes(query)||status&&status!==card.dataset.packageStatus);if(!card.hidden)count++;});root.querySelector('[data-package-count]')!.textContent=`${count} package${count===1?'':'s'}`;root.querySelector<HTMLElement>('[data-package-no-results]')!.hidden=count>0;});}
+</script>
+<style>.pub-filters label{display:grid;gap:.3rem;font-size:.8rem}.pub-card[hidden]{display:none}</style>

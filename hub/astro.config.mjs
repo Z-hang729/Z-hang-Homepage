@@ -7,6 +7,7 @@ import remarkMermaid from "./scripts/remark-mermaid.mjs";
 import remarkBase from "./scripts/remark-base.mjs";
 import remarkAcademic from "./scripts/remark-academic.mjs";
 import remarkKnowledge from "./scripts/remark-knowledge.mjs";
+import remarkCitations from "./scripts/remark-citations.mjs";
 import { localAdminPlugin } from "./scripts/admin-plugin.mjs";
 import { unified } from "@astrojs/markdown-remark";
 import idl from "./scripts/idl-language.mjs";
@@ -20,7 +21,7 @@ export default defineConfig({
   integrations: [mdx()],
   markdown: {
     processor: unified({
-      remarkPlugins: [remarkMath, remarkAcademic, remarkKnowledge, remarkMermaid, remarkBase],
+      remarkPlugins: [remarkMath, remarkAcademic, remarkKnowledge, remarkCitations, remarkMermaid, remarkBase],
       rehypePlugins: [rehypeKatex],
     }),
     shikiConfig: {

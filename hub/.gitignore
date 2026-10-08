@@ -3,6 +3,7 @@ dist/
 .astro/
 .local/
 public/vendor/pdfjs/
+public/documents/academic-cv.pdf
 .env
 .env.*
 !.env.example

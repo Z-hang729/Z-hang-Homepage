@@ -4,6 +4,7 @@ import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../files.mjs';
 import {validateRelationsMetadata,knowledgeNodesFromFiles,buildKnowledgeGraph} from '../knowledge.mjs';
+import {validateAcademicRecord,validateAcademicCV,assertPackageVersionUpdate} from '../academic-schema.mjs';
 
 // Shared with browser and Worker: intentionally free of Node APIs.
 export const OWNER_LIMITS = Object.freeze({ fileBytes: STORAGE_LIMITS.repositoryBytes, textBytes: 1048576, batchBytes: STORAGE_LIMITS.metadataRequestBytes, files: Number.MAX_SAFE_INTEGER });
@@ -24,6 +25,8 @@ export function assertSlug(value) { if (typeof value !== 'string' || value.lengt
 export function assertAllowedPath(input, { action = 'upsert' } = {}) {
   const value = safeRelativePath(input);
   if (/^hub\/src\/data\/files\/[a-z0-9][a-z0-9-]{0,99}\.json$/.test(value)) return value;
+  if (/^hub\/src\/data\/(figures|references|packages)\/[a-z0-9]+(?:-[a-z0-9]+)*\.json$/.test(value)) return value;
+  if(value==='hub/src/data/cv.json'){if(action==='delete')throw ownerError('Reset CV fields in the editor instead of deleting its source.','PATH_NOT_ALLOWED');return value;}
   if (/^hub\/src\/data\/(profile|navigation|homepage)\.yaml$/.test(value)) { if (action === 'delete') throw ownerError('Essential data files cannot be deleted.', 'PATH_NOT_ALLOWED'); return value; }
   const content = value.match(/^hub\/src\/content\/(research|notes|projects)\/([^/]+)\/(index\.mdx?|metadata\.yaml|files\/.+\.mdx?)$/);
   if (content) { assertSlug(content[2]); return value; }
@@ -62,6 +65,8 @@ export function validateMetadata(data, { kind, document = false, log = false } =
   if(log&&data.updated!==undefined&&(!validDate(data.updated)||data.updated<data.date))throw ownerError('Log updated date must not precede its date.');
   if(log&&data.status!==undefined&&!['Planning','In Progress','Completed','Paused'].includes(data.status))throw ownerError('Choose a supported log status.');
   if(log&&data.kind!==undefined&&!['note','experiment','result'].includes(data.kind))throw ownerError('Choose note, experiment or result for a log.');
+  if(data.visibility!==undefined&&!['public','unlisted'].includes(data.visibility))throw ownerError('Private content must stay in local drafts; this repository is public.');
+  if(data.publicationStatus!==undefined&&!['draft','published','archived'].includes(data.publicationStatus))throw ownerError('Choose a valid publication status.');
   for(const key of ['summary','sourceFileId'])if(data[key]!==undefined&&typeof data[key]!=='string')throw ownerError(`${key} must be text.`);
   try{validateRelationsMetadata(data);}catch(error){throw ownerError(error.message,'INVALID_RELATION');}
   for (const k of ['authors', 'collaborators', 'techStack']) if (data[k] !== undefined && (!Array.isArray(data[k]) || data[k].some(v => typeof v !== 'string'))) throw ownerError(`${k} must be a string list.`);
@@ -93,7 +98,7 @@ export function validateAsset(path, bytes, mime = '') {
 function walk(node, callback) { callback(node); for(const child of node.children || []) walk(child,callback); }
 export function validateMarkdownBody(body) { walk(parser.parse(body), node => { if (node.type==='html') throw ownerError('Raw HTML and MDX components are disabled in editable Markdown. Use ordinary figures, links, quotations and equations.'); if(['link','image','definition'].includes(node.type)) assertSafeURL(node.url,{allowEmpty:false}); }); return body; }
 export function snapshotIndex(files=[]) { if(files instanceof Map) return files; if(!Array.isArray(files)) throw ownerError('Snapshot files must be a list or Map.'); return new Map(files.map(file=>[file.path,file])); }
-export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,maxBatchBytes=OWNER_LIMITS.batchBytes}={}) {
+export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,maxBatchBytes=OWNER_LIMITS.batchBytes,allowUnpublishedAcademicTargets=false}={}) {
   if(!Array.isArray(input) || !input.length) throw ownerError('Publish needs at least one changed file.'); const snapshot=snapshotIndex(snapshotFiles),names=new Set(); let bytes=0;
   const changes=input.map(change=>{
     if(!change || !['upsert','delete'].includes(change.action)) throw ownerError('A change needs upsert/delete action.'); const path=assertAllowedPath(change.path,{action:change.action}), canonical=path.normalize('NFKC').toLowerCase(); if(names.has(canonical)) throw ownerError('Duplicate or case-colliding paths.'); names.add(canonical); const existing=snapshot.get(path),collision=[...snapshot.keys()].find(p=>p!==path && p.normalize('NFKC').toLowerCase()===canonical); if(collision) throw ownerError(`Path collides with ${collision}.`,'PATH_NOT_ALLOWED');
@@ -105,6 +110,11 @@ export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,m
       let file;try{file=validateFileMetadata(JSON.parse(change.content));}catch(error){throw ownerError(error.message,'INVALID_FILE_METADATA');}
       if(path!==`hub/src/data/files/${file.id}.json`)throw ownerError('Metadata path must match the stable file id.','INVALID_FILE_METADATA');
     }
+    else if(/^hub\/src\/data\/(?:(?:figures|references|packages)\/[^/]+|cv)\.json$/.test(path)){
+      if(change.encoding!=='utf8'||decoded.length>OWNER_LIMITS.textBytes)throw ownerError('Academic metadata must be a small UTF-8 JSON document.','INVALID_ACADEMIC_METADATA');
+      try{const record=JSON.parse(change.content);path.endsWith('/cv.json')?validateAcademicCV(record):validateAcademicRecord(path.split('/')[3],record,{path});if(path.startsWith('hub/src/data/packages/')&&existing?.content)assertPackageVersionUpdate(JSON.parse(existing.content),record);}
+      catch(error){throw ownerError(error.message,'INVALID_ACADEMIC_METADATA');}
+    }
     else if(path.startsWith('hub/public/')) validateAsset(path,decoded,change.mime || '');
     else { if(change.encoding!=='utf8' || decoded.length>OWNER_LIMITS.textBytes || change.content.includes('\u0000')) throw ownerError('Editable content must be UTF-8 up to 1 MiB.','FILE_TOO_LARGE',413); if(path.endsWith('.yaml')) { const data=parseYAML(change.content); if(path.startsWith('hub/src/data/')) validateData(path,data); else {if(!data || typeof data!=='object' || Array.isArray(data)) throw ownerError('Manifest must be an object.'); links(data);} } else { const {metadata,body}=parseFrontmatter(change.content),kind=path.split('/')[3]; validateMetadata(metadata,{kind,document:path.includes('/files/'),log:kind==='logs'}); if(path.endsWith('.mdx')) {if(!allowTrustedMdx || !existing?.content || body!==parseFrontmatter(existing.content).body) throw ownerError('Executable MDX body edits require conversion to safe Markdown; the original is preserved.','MDX_REQUIRES_CONVERSION');} else validateMarkdownBody(body); } }
     return {path,action:'upsert',content:change.content,encoding:change.encoding,expectedSha:change.expectedSha};
@@ -114,6 +124,13 @@ export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,m
   for(const c of changes) if(c.action==='upsert' && c.path.startsWith('hub/src/content/logs/')) {const {metadata}=parseFrontmatter(c.content); if(!resulting.has(`hub/src/content/research/${metadata.project}/index.md`) && !resulting.has(`hub/src/content/research/${metadata.project}/index.mdx`)) throw ownerError('Research update must belong to an existing project.');}
   for(const c of changes)if(c.action==='upsert'&&c.path.startsWith('hub/src/data/files/')){const file=JSON.parse(c.content);for(const kind of CONTENT_KINDS)for(const slug of fileRelations(file,kind))if(!resulting.has(`hub/src/content/${kind}/${slug}/index.md`)&&!resulting.has(`hub/src/content/${kind}/${slug}/index.mdx`))throw ownerError('File association must refer to an existing content page.','INVALID_FILE_ASSOCIATION');}
   const resultingFiles=new Map(snapshot);for(const change of changes){if(change.action==='delete')resultingFiles.delete(change.path);else resultingFiles.set(change.path,change);}
-  try{buildKnowledgeGraph(knowledgeNodesFromFiles(resultingFiles));}catch(error){throw ownerError(error.message,'INVALID_RELATION');}
+  try{
+    const nodes=knowledgeNodesFromFiles(resultingFiles),graph=buildKnowledgeGraph(nodes,{allowUnpublishedAcademicTargets}),keys=new Set();
+    const fileRecords=nodes.filter(node=>node.type==='file').map(node=>node.metadata);
+    for(const node of nodes)if(['figure','reference','package'].includes(node.type))validateAcademicRecord({figure:'figures',reference:'references',package:'packages'}[node.type],node.metadata,{path:'hub/'+node.sourcePath,files:fileRecords});
+    for(const node of nodes)if(node.type==='reference'){const key=node.metadata.citationKey;if(keys.has(key))throw new Error(`Duplicate citation key: ${key}`);keys.add(key);}
+    const cvFile=resultingFiles.get('hub/src/data/cv.json');
+    if(cvFile){const cv=validateAcademicCV(JSON.parse(cvFile.content)),selected=[...(cv.selectedResearch||[]).map(item=>item.id),...(cv.selectedProjects||[]).map(item=>item.id),...(cv.publications||[]).map(item=>item.referenceId).filter(Boolean)];for(const id of selected){const node=graph.nodes.find(item=>item.id===id);if(!node)throw new Error(`CV selection no longer exists: ${id}`);if(node.visibility!=='public'||node.publicationStatus!=='published'||node.metadata.demo)throw new Error(`CV selections require real published public content: ${id}`);}}
+  }catch(error){throw ownerError(error.message,'INVALID_RELATION');}
   return {changes,bytes,paths:changes.map(c=>c.path)};
 }

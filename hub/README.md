@@ -299,3 +299,13 @@ helper 会先检查、测试与构建，显示远端、分支与变更范围；�
 Research 日志现有独立阅读页、筛选和稳定引用；Notes 支持课程章节、阅读顺序、数学标签引用及从 Library 显式导入 Markdown。Owner 的 Add 菜单和搜索窗口提供 New Research Log、New Notes Chapter、Link Existing File、Add Relation。保存到草稿后统一发布；正式页面和搜索索引等待 Pages 构建完成。
 
 本次不要求重写旧内容，旧地址和原件保留。说明和维护入口：[Phase 3 变更记录](docs/PHASE3-CHANGELOG.md)、[初始审计](docs/PHASE3-AUDIT.md)、[Research](docs/RESEARCH-NOTEBOOK.md)、[Notes](docs/DIGITAL-NOTES.md)、[关联](docs/KNOWLEDGE-CONNECTIONS.md)、[测试](docs/PHASE3-TESTING.md)。
+
+## Academic publishing（Phase 4）
+
+页脚 **Academic publishing** 打开独立的 Figures、References、Activity、CV 与 Research Packages 页面。Owner workspace / Add 提供对应编辑入口；保存草稿、审核和发布沿用现有流程。首页正文、主要导航、已有笔记及原件保持原样，新科研展示集合初始为空。
+
+Figures 和研究包复用 File Library 的稳定 ID。References 支持 BibTeX、DOI 元数据审核、APA/IEEE CSL 和 Markdown 引用。Activity 从真实公开记录派生。CV 在构建时生成中英文 PDF。研究包保存原件校验信息与不可变版本，需要明确的实际验证记录才能标记已复现。
+
+学术模块的 draft 保存在当前设备，浏览器与服务端均阻止把草稿及草稿历史发布到远程仓库；准备好后先标记 published，再审核并发布。unlisted / archived 元数据以及手工提交的文件仍可从公开 GitHub 仓库和历史获取，不可当作私密存储。
+
+使用与维护：[Owner 操作指南](docs/PHASE4-OWNER-GUIDE.md)、[初始审计](docs/PHASE4-AUDIT.md)、[变更记录](docs/PHASE4-CHANGELOG.md)、[测试说明](docs/PHASE4-TESTING.md)、[Figures](docs/FIGURES-GALLERY.md)、[Bibliography](docs/ACADEMIC-BIBLIOGRAPHY.md)、[Activity](docs/ACTIVITY-FEED.md)、[CV](docs/ACADEMIC-CV.md)、[Research Packages](docs/RESEARCH-REPRODUCIBILITY.md)。

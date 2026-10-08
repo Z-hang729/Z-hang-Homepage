@@ -6,6 +6,9 @@ import YAML from 'yaml';
 import { validateData as validateOwnerData, validateAsset } from '../src/lib/owner/policy.mjs';
 import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../src/lib/files.mjs';
 import {readKnowledgeGraph} from './knowledge-source.mjs';
+import {readAcademicRecords,readCVRecord} from '../src/lib/academic-records.mjs';
+import {deriveCV} from '../src/lib/academic-cv.mjs';
+import {validateAcademicRecord} from '../src/lib/academic-schema.mjs';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const collections = ['research', 'notes', 'projects'];
@@ -88,7 +91,8 @@ export async function validateContent(rootDir = process.cwd()) {
   const errors = [];
   const warnings = [];
   const entries = [];
-  const routes = new Set(['/', '/about', '/cv', '/search', '/files', '/publications', '/changelog', '/research', '/notes', '/projects', '/tags', '/admin', '/owner', '/rss.xml', '/robots.txt', '/sitemap-index.xml', '/sitemap-0.xml']);
+  const routes = new Set(['/', '/about', '/cv', '/search', '/files', '/publications', '/changelog', '/research', '/notes', '/projects', '/tags', '/admin', '/owner', '/rss.xml', '/robots.txt', '/sitemap-index.xml', '/sitemap-0.xml','/academic','/figures','/references','/activity','/packages']);
+  try{for(const kind of ['figures','references','packages'])for(const record of readAcademicRecords(kind,{root,publicOnly:false}))if(record.publicationStatus==='published'&&record.visibility==='public')routes.add(`/${kind}/${record.id.split(':')[1]}`);}catch(error){errors.push('Academic records: '+error.message);}
   const relative = file => path.relative(root, file).replaceAll(path.sep, '/');
   const report = (file, message) => errors.push(`${relative(file)}: ${message}`);
   const requireText = (data, key, file) => {
@@ -234,7 +238,13 @@ export async function validateContent(rootDir = process.cwd()) {
     }
   }
   if (!profile?.email && !profile?.github) warnings.push('Public contact details are intentionally empty; add only details you choose to publish.');
-  try{readKnowledgeGraph(root);}catch(error){errors.push(`Knowledge connections: ${error.message}`);}
+  try{
+    const graph=readKnowledgeGraph(root);deriveCV(profile,readCVRecord({root}),graph.nodes);
+    const fileRecords=graph.nodes.filter(node=>node.type==='file').map(node=>node.metadata);
+    for(const node of graph.nodes)if(['figure','package','reference'].includes(node.type))validateAcademicRecord({figure:'figures',package:'packages',reference:'references'}[node.type],node.metadata,{files:fileRecords,path:'hub/'+node.sourcePath});
+    const cv=readCVRecord({root});for(const id of [...(cv.selectedResearch||[]).map(item=>item.id),...(cv.selectedProjects||[]).map(item=>item.id),...(cv.publications||[]).map(item=>item.referenceId).filter(Boolean)]){const node=graph.nodes.find(item=>item.id===id);if(!node||node.visibility!=='public'||node.publicationStatus!=='published'||node.metadata.demo)throw new Error('CV selection requires real published content: '+id);}
+    const keys=new Set();for(const node of graph.nodes.filter(node=>node.type==='reference')){if(keys.has(node.metadata.citationKey))throw new Error('Duplicate citation key: '+node.metadata.citationKey);keys.add(node.metadata.citationKey);}
+  }catch(error){errors.push(`Academic publishing and knowledge connections: ${error.message}`);}
   return { errors, warnings, entries };
 }
 

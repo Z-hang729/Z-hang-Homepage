@@ -1,6 +1,7 @@
 import {CODE_LANGUAGES} from './highlight.js';
 import '../styles/academic.css';
 import {remarkKnowledgeLinks} from '../lib/knowledge.mjs';
+import {listCitationKeys} from '../lib/bibliography-model.mjs';
 let knowledgePreview=()=>[];
 export function setKnowledgePreview(provider){knowledgePreview=typeof provider==='function'?provider:()=>[];}
 
@@ -9,7 +10,9 @@ export async function renderPreview(markdown,target,base) {
   let diagramCount=0;const diagrams=[];
   function transform(){return tree=>{function walk(node){if(['link','image','definition'].includes(node.type)&&node.url?.startsWith('/')&&!node.url.startsWith('//'))node.url=base.replace(/\/$/,'')+node.url;if(node.type==='code'&&node.lang==='mermaid'){diagrams.push(node.value);node.value='Diagram preview '+(++diagramCount);node.lang='owner-mermaid';}node.children?.forEach(walk);}walk(tree);};}
   const schema={...defaultSchema,tagNames:[...defaultSchema.tagNames,'aside','figure','figcaption'],attributes:{...defaultSchema.attributes,'*':[...(defaultSchema.attributes['*']||[]),['className',/^academic-[a-z-]+$/],'dataAcademicKind','dataAcademicReference'],code:[...(defaultSchema.attributes.code||[]),['className',/^language-./,'math-inline','math-display']]}};
-  const html=await unified().use(parse).use(gfm).use(math).use(academic).use(remarkKnowledgeLinks,{nodes:()=>knowledgePreview()}).use(transform).use(rehype).use(sanitize,schema).use(katex,{trust:false}).use(stringify).process(markdown);
+  const processor=unified().use(parse).use(gfm).use(math).use(academic).use(remarkKnowledgeLinks,{nodes:()=>knowledgePreview()});
+  if(listCitationKeys(markdown).length){const {remarkCitations}=await import('../lib/bibliography.mjs');processor.use(remarkCitations,{references:knowledgePreview().filter(node=>node.type==='reference').map(node=>node.metadata),publicOnly:false});}
+  const html=await processor.use(transform).use(rehype).use(sanitize,schema).use(katex,{trust:false}).use(stringify).process(markdown);
   target.innerHTML=String(html);
   if(target.querySelector('pre > code:not(.language-owner-mermaid)')){const {highlightCodeBlocks}=await import('./highlight.js');await highlightCodeBlocks(target);}
   if(diagrams.length){const {default:mermaid}=await import('mermaid');mermaid.initialize({startOnLoad:false,securityLevel:'strict',theme:document.documentElement.dataset.theme==='dark'?'dark':'neutral'});let index=0;for(const code of target.querySelectorAll('code.language-owner-mermaid')){const source=diagrams[index++];const result=await mermaid.render('owner-mermaid-'+crypto.randomUUID(),source);const wrapper=document.createElement('div');wrapper.className='owner-diagram';wrapper.innerHTML=result.svg;code.parentElement.replaceWith(wrapper);}}
@@ -19,6 +22,7 @@ export function markdownEditor(value,base) {
   const host=document.createElement('div');host.className='owner-markdown';
   const toolbar=document.createElement('div');toolbar.className='owner-markdown-toolbar';
   const textarea=document.createElement('textarea');textarea.className='owner-markdown-source';textarea.value=value;textarea.rows=16;textarea.setAttribute('aria-label','Markdown content');
+  const cite=document.createElement('button');cite.type='button';cite.textContent='Insert citation';cite.addEventListener('click',async()=>{try{const library=await import('./bibliography.js');library.installCitationChooser(()=>knowledgePreview().filter(node=>node.type==='reference'));await library.chooseCitation(textarea);}catch(error){status.textContent=error.message;}});toolbar.append(cite);
   const preview=document.createElement('div');preview.className='owner-markdown-preview prose';preview.setAttribute('aria-label','Markdown preview');
   const status=document.createElement('p');status.className='owner-muted';status.setAttribute('role','status');
   const languageLabel=document.createElement('label');languageLabel.className='owner-field owner-code-language';const languageTitle=document.createElement('span');languageTitle.textContent='Code language';const language=document.createElement('select');language.setAttribute('aria-label','Code language');language.dataset.ownerCodeLanguage='';

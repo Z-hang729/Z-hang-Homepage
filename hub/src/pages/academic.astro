@@ -1,0 +1,7 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import '../styles/academic-publishing.css';
+import {url} from '../lib/site';
+const modules=[['Figures','/figures/','Scientific figures linked to their original files and research context.'],['References','/references/','A shared bibliography, citations and source metadata.'],['Activity','/activity/','A timeline derived from published academic work.'],['Academic CV','/cv/','Online CV and a downloadable PDF from the same information.'],['Research Packages','/packages/','Versioned inputs, code, methods and outputs for reproducibility.']];
+---
+<BaseLayout title="Academic publishing"><div class="pub-shell"><header class="pub-header"><h1>Academic publishing</h1><p>Research context, scholarly sources and reproducible work.</p></header><div class="pub-grid">{modules.map(([title,href,description])=><article class="pub-card"><h2><a href={url(href)}>{title}</a></h2><p>{description}</p></article>)}</div></div></BaseLayout>

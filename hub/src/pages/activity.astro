@@ -1,0 +1,36 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import {url} from '../lib/site';
+import {deriveActivity,ACTIVITY_TYPES} from '../lib/activity.mjs';
+import {readKnowledgeGraph} from '../../scripts/knowledge-source.mjs';
+import '../styles/academic-publishing.css';
+const events=deriveActivity(readKnowledgeGraph().nodes);
+const tags=[...new Set(events.flatMap((event:any)=>event.tags))].sort();
+const groups=[...new Set(events.map((event:any)=>event.date.slice(0,7)))];
+const monthLabel=(month:string)=>new Intl.DateTimeFormat('en',{month:'long',year:'numeric',timeZone:'UTC'}).format(new Date(`${month}-01T00:00:00Z`));
+---
+<BaseLayout title="Academic activity" description="Published research, notes, figures, projects, and research packages.">
+  <div class="container pub-shell">
+    <header class="page-intro pub-header"><p class="eyebrow">ACADEMIC ACTIVITY</p><h1>Research & learning in progress.</h1><p class="intro-description">A dated view of published work across the academic hub.</p><nav class="pub-nav" aria-label="Academic publishing"><a href={url('/figures/')}>Figures</a><a href={url('/references/')}>References</a><a href={url('/packages/')}>Research packages</a><a href={url('/cv/')}>Academic CV</a></nav></header>
+    {events.length>0?<>
+      <form class="pub-filters" data-activity-filters role="search" aria-label="Filter academic activity" data-pagefind-ignore>
+        <label>Search<input type="search" name="query" placeholder="Title, summary, or tag"/></label>
+        <label>Type<select name="type"><option value="">All activity</option>{Object.entries(ACTIVITY_TYPES).filter(([type])=>events.some((event:any)=>event.sourceType===type)).map(([type,label])=><option value={type}>{label}</option>)}</select></label>
+        <label>Tag<select name="tag"><option value="">All tags</option>{tags.map(tag=><option value={tag}>{tag}</option>)}</select></label>
+        <label>From<input type="date" name="from"/></label><label>To<input type="date" name="to"/></label><button type="reset" class="button-secondary">Clear filters</button>
+      </form>
+      <p class="pub-meta" data-activity-count aria-live="polite">{events.length} published {events.length===1?'activity':'activities'}</p>
+      <div class="activity-timeline">{groups.map(month=><section data-activity-group><h2>{monthLabel(month)}</h2><ol>{events.filter((event:any)=>event.date.startsWith(month)).map((event:any)=><li id={event.id} class="activity-item" data-activity-item data-type={event.sourceType} data-date={event.date} data-tags={JSON.stringify(event.tags)} data-search={[event.title,event.summary,...event.tags].join(' ').toLocaleLowerCase()}>
+        <div class="activity-date"><time datetime={event.date}>{event.date}</time><span>{event.label}</span></div><article class="pub-card"><h3><a href={url(event.path)}>{event.title}</a></h3>{event.summary&&<p>{event.summary}</p>}{event.tags.length>0&&<div class="pub-meta">{event.tags.join(' · ')}</div>}<a class="text-link" href={url(event.path)}>View source →</a></article>
+      </li>)}</ol></section>)}</div>
+      <p class="pub-empty" data-activity-no-results hidden>No published activity matches these filters.</p>
+    </>:<div class="pub-empty"><h2>Academic activity will appear here as work is published.</h2><p>Research updates, notes, figures, projects, and research packages share their original publication dates and source links.</p></div>}
+  </div>
+  <script>
+    const form=document.querySelector<HTMLFormElement>('[data-activity-filters]');
+    const items=[...document.querySelectorAll<HTMLElement>('[data-activity-item]')];
+    function apply(){if(!form)return;const data=new FormData(form),query=String(data.get('query')||'').toLocaleLowerCase().trim().split(/\s+/).filter(Boolean),type=String(data.get('type')||''),tag=String(data.get('tag')||''),from=String(data.get('from')||''),to=String(data.get('to')||'');let count=0;for(const item of items){const shown=(!type||item.dataset.type===type)&&(!tag||JSON.parse(item.dataset.tags||'[]').includes(tag))&&(!from||(item.dataset.date||'')>=from)&&(!to||(item.dataset.date||'')<=to)&&query.every(term=>(item.dataset.search||'').includes(term));item.hidden=!shown;if(shown)count++;}document.querySelectorAll<HTMLElement>('[data-activity-group]').forEach(group=>group.hidden=![...group.querySelectorAll<HTMLElement>('[data-activity-item]')].some(item=>!item.hidden));const countNode=document.querySelector('[data-activity-count]');if(countNode)countNode.textContent=`${count} published ${count===1?'activity':'activities'}`;const empty=document.querySelector<HTMLElement>('[data-activity-no-results]');if(empty)empty.hidden=count!==0;}
+    form?.addEventListener('input',apply);form?.addEventListener('submit',event=>event.preventDefault());form?.addEventListener('reset',()=>setTimeout(apply,0));
+  </script>
+</BaseLayout>
+<style>.activity-timeline h2{margin:36px 0 22px}.activity-timeline ol{padding:0;list-style:none}.activity-item{display:grid;grid-template-columns:180px 1fr;gap:24px;margin-bottom:22px}.activity-date{display:flex;flex-direction:column;gap:7px;padding-top:20px;color:var(--muted);font-size:.85rem}.activity-date time{color:var(--ink);font-variant-numeric:tabular-nums}.activity-item h3{margin:0 0 12px}.activity-item p{overflow-wrap:anywhere}.activity-item[hidden],section[hidden]{display:none}@media(max-width:650px){.activity-item{grid-template-columns:1fr;gap:8px}.activity-date{padding-top:0;flex-direction:row;justify-content:space-between;flex-wrap:wrap}}</style>

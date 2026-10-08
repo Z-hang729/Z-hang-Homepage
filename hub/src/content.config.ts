@@ -32,6 +32,7 @@ const common = {
   relations:z.array(z.object({target:z.string().min(1),type:z.enum(['related','references','uses','derivedFrom','attachment']).default('related')})).default([]),
   relatedNotes:z.array(z.string()).default([]),relatedResearch:z.array(z.string()).default([]),
   relatedProjects:z.array(z.string()).default([]),relatedFiles:z.array(z.string()).default([]),
+  relatedFigures:z.array(z.string()).default([]),relatedReferences:z.array(z.string()).default([]),relatedPackages:z.array(z.string()).default([]),relatedLogs:z.array(z.string()).default([]),
 };
 const collectionLoader = (name: string) => glob({ pattern: '*/index.{md,mdx}', base: `./src/content/${name}`, generateId: ({ entry }) => entry.replace(/\/index\.(md|mdx)$/, '') });
 const orderedDates = (value: { date: Date; updated: Date }, ctx: RefinementCtx) => {
@@ -61,6 +62,7 @@ const logs = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: '
   status:z.enum(['Planning','In Progress','Completed','Paused']).optional(),
   kind:z.enum(['note','experiment','result']).optional(),
   relatedNotes:z.array(z.string()).default([]),relatedProjects:z.array(z.string()).default([]),relatedFiles:z.array(z.string()).default([]),
+  relatedFigures:z.array(z.string()).default([]),relatedReferences:z.array(z.string()).default([]),relatedPackages:z.array(z.string()).default([]),relatedResearch:z.array(z.string()).default([]),relatedLogs:z.array(z.string()).default([]),
   relations:z.array(z.object({target:z.string().min(1),type:z.enum(['related','references','uses','derivedFrom','attachment']).default('related')})).default([]),
 }) });
 const publications = defineCollection({ loader: glob({ pattern: '**/*.{md,mdx}', base: './src/content/publications' }), schema: z.object({

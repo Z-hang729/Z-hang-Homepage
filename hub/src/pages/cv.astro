@@ -2,5 +2,33 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import Icon from '../components/Icon.astro';
 import {profile,url} from '../lib/site';
+import {deriveCV} from '../lib/academic-cv.mjs';
+import {readCVRecord} from '../lib/academic-records.mjs';
+import {readKnowledgeGraph} from '../../scripts/knowledge-source.mjs';
+const cv:any=deriveCV(profile,readCVRecord(),readKnowledgeGraph().nodes);
+const pdf=profile.cvPdf||'/documents/academic-cv.pdf';
+const period=(item:any)=>[item.start,item.end].filter(Boolean).join(' — ')||item.date||item.year||'';
+const entryTitle=(item:any)=>typeof item==='string'?item:item.title||item.institution||'';
+const authorName=(author:any)=>typeof author==='string'?author:author.literal||[author.given,author.family].filter(Boolean).join(' ');
 ---
-<BaseLayout title="Curriculum vitae"><div class="container"><header class="page-intro"><p class="eyebrow">CURRICULUM VITAE</p><h1>{profile.displayName}</h1><p class="intro-description">{profile.degree} × {profile.secondDegree}<br/>{profile.role}, {profile.university}</p><div class="cv-toolbar">{profile.cvPdf&&<a class="button" href={url(profile.cvPdf)} download><Icon name="download" size={16}/>Download CV PDF</a>}<button class="button-secondary" id="print-cv">Print / Save as PDF</button></div></header><article class="profile-body" style="max-width:850px;padding:25px 0 60px"><section><h2>Profile</h2><p>{profile.bio}</p></section><section><h2>Education</h2>{profile.education.map((item:any)=><div class="education-item"><div><h3>{item.institution}</h3><p>{item.description}</p></div><time>{item.start} — {item.end}</time></div>)}</section><section><h2>Research interests</h2><div class="interests">{profile.researchInterests.map((item:string)=><span class="interest">{item}</span>)}</div></section>{profile.skills.length>0&&<section><h2>Skills</h2><p>{profile.skills.join(' · ')}</p></section>}{['honors','presentations'].map(key=>profile[key].length>0&&<section><h2>{key==='honors'?'Honors & awards':'Presentations'}</h2><ul>{profile[key].map((item:any)=><li>{typeof item==='string'?item:item.title}</li>)}</ul></section>)}<section><h2>Publications</h2><a class="text-link" href={url('/publications/')}>View the publication archive →</a></section>{profile.email&&<section><h2>Contact</h2><a href={`mailto:${profile.email}`}>{profile.email}</a></section>}</article></div><script>document.querySelector('#print-cv')?.addEventListener('click',()=>window.print());</script></BaseLayout>
+<BaseLayout title="Curriculum vitae">
+  <div class="container cv-document">
+    <header class="page-intro"><p class="eyebrow">CURRICULUM VITAE</p><h1>{cv.profile.displayName}</h1><p class="intro-description">{cv.profile.degree} × {cv.profile.secondDegree}<br/>{cv.profile.role}{cv.profile.role&&cv.profile.university?', ':''}{cv.profile.university}</p><div class="cv-toolbar" data-pagefind-ignore><a class="button" href={url(pdf)} download><Icon name="download" size={16}/>Download CV PDF</a><button class="button-secondary" id="print-cv">Print / Save as PDF</button></div></header>
+    <article class="profile-body cv-body" data-cv-document>
+      {cv.visibleSections.map((section:any)=><section data-cv-section={section.id}>
+        <h2>{section.title}</h2>
+        {section.id==='profile'?<p>{cv.profile.bio}</p>:section.id==='education'?cv.education.map((item:any)=><div class="education-item cv-entry"><div><h3>{item.institution}</h3><p>{item.description}</p></div><time>{period(item)}</time></div>):section.id==='researchInterests'?<div class="interests">{cv.researchInterests.map((item:string)=><span class="interest">{item}</span>)}</div>:section.id==='skills'?<p>{cv.skills.join(' · ')}</p>:section.id==='links'?<ul class="cv-links">{cv.links.map((item:any)=><li><a href={url(item.url)}>{item.title||item.url}</a></li>)}</ul>:<div class="cv-entries">{cv[section.id].map((item:any)=><div class="cv-entry">
+          <div class="cv-entry-heading"><h3>{typeof item==='object'&&item.url?<a href={url(item.url)}>{entryTitle(item)}</a>:entryTitle(item)}</h3>{typeof item==='object'&&period(item)&&<time>{period(item)}</time>}</div>
+          {item.institution&&item.title&&<p class="cv-institution">{item.institution}</p>}{item.authors?.length>0&&<p>{item.authors.map(authorName).join(', ')}</p>}{item.description&&<p>{item.description}</p>}{item.doi&&<a href={`https://doi.org/${encodeURIComponent(item.doi)}`}>DOI: {item.doi}</a>}
+        </div>)}</div>}
+      </section>)}
+      {cv.profile.email&&<section data-cv-section="contact"><h2>Contact</h2><a href={`mailto:${cv.profile.email}`}>{cv.profile.email}</a></section>}
+    </article>
+  </div>
+  <script>document.querySelector('#print-cv')?.addEventListener('click',()=>window.print());</script>
+</BaseLayout>
+<style>
+  .cv-body{max-width:850px;padding:25px 0 60px}.cv-entry{margin:0 0 22px;break-inside:avoid}.cv-entry-heading{display:flex;justify-content:space-between;align-items:baseline;gap:20px}.cv-entry h3{margin:0;font-size:1.04rem}.cv-entry p{margin:5px 0;white-space:pre-line;overflow-wrap:anywhere}.cv-entry time{flex-shrink:0;color:var(--muted);font-size:.85rem}.cv-institution{color:var(--muted)}.cv-links{padding-left:1.2rem}.cv-body a{overflow-wrap:anywhere}.cv-body section{margin-bottom:32px}
+  @media(max-width:600px){.cv-entry-heading{display:block}.education-item{flex-direction:column;gap:5px}}
+  @media print{@page{size:A4;margin:18mm}.cv-document{width:auto;max-width:none;padding:0}.cv-body{padding:0;max-width:none}.cv-toolbar{display:none}.page-intro{padding-top:0;padding-bottom:10px}.page-intro h1{font-size:28pt}.intro-description{font-size:11pt}.cv-body{font-size:10.5pt}.cv-body h2{font-size:14pt;break-after:avoid}.cv-body section{margin-bottom:16pt;break-inside:auto}.cv-entry{break-inside:avoid}.interest{border:0;padding:0;background:none}.interests{gap:10pt}}
+</style>

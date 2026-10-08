@@ -1,0 +1,7 @@
+.owner-bibliography-dialog .owner-dialog-heading>div{min-width:0}
+.owner-bibliography-dialog .owner-dialog-heading>button{flex-shrink:0;white-space:nowrap}
+.owner-bibliography-dialog pre{display:block;white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;max-height:28rem;overflow:auto;padding:.75rem;border:1px solid var(--line);border-radius:6px;font:12px/1.6 var(--font-mono)}
+.owner-bibliography-dialog .owner-entry-list article{padding:1rem}
+.owner-bibliography-dialog .owner-dialog-body button{max-width:100%;white-space:normal;overflow-wrap:anywhere}
+.owner-bibliography-dialog .owner-check{margin:.4rem 0;overflow-wrap:anywhere}
+.owner-bibliography-dialog .owner-check input{flex-shrink:0}

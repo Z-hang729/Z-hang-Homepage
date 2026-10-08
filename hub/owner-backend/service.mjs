@@ -3,6 +3,7 @@ import { GitHub, OwnerError, utf8Blob } from './github.mjs';
 import { bridgePage, authenticationCompletePage } from './bridge.mjs';
 import { assertAllowedPath, validateChangeSet } from '../src/lib/owner/policy.mjs';
 import { StorageService } from './storage.mjs';
+import {assertPublishableAcademicChanges} from '../src/lib/academic-schema.mjs';
 
 const COOKIE = '__Host-owner_session';
 const OAUTH_COOKIE = '__Host-owner_oauth';
@@ -236,6 +237,7 @@ export class OwnerService {
     // only the changed records: parent pages and incoming links also matter.
     const snapshot = await this.snapshot(github, actualHead);
     const normalized = validateChangeSet(params.changes, { snapshotFiles: new Map(snapshot.files.map(file => [file.path, file])), allowTrustedMdx: true });
+    try{assertPublishableAcademicChanges(normalized.changes);}catch(error){throw new OwnerError('UNPUBLISHED_ACADEMIC_DRAFT',error.message,409);}
     await this.files.validateMetadataChanges(normalized.changes,{snapshotFiles:snapshot.files});
     await this.storage.put(key, { fingerprint, expectedHead: actualHead, expiresAt: this.now() + 86400000 });
     try {
