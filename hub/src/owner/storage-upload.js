@@ -112,6 +112,7 @@ export class StorageUploadQueue {
     this.changed(); return records;
   }
   start() { this.started = true; this.paused = false; for (const item of this.items) if (item.status === 'paused' && item.file) { item.status = 'queued'; item.pauseRequested = false; } this.pump(); this.changed(); }
+  setConcurrency(value) { this.concurrency = Math.min(6, Math.max(3, Math.floor(Number(value) || 3))); this.pump(); this.changed(); return this.concurrency; }
   attachFile(key, file) {
     const item = this.items.find(item => item.key === key);
     if (!item || item.status !== 'needs-file') throw new Error('This upload no longer needs an original file.');
@@ -133,7 +134,7 @@ export class StorageUploadQueue {
   }
   retry(key) {
     const item = this.items.find(item => item.key === key); if (!item || !['failed', 'cancelled'].includes(item.status) || !item.file) return;
-    if (item.status === 'cancelled') { item.sessionId = null; item.parts = []; item.loaded = 0; }
+    if (item.status === 'cancelled') { item.sessionId = null; item.parts = []; item.loaded = 0; item.duplicateChecked = false; }
     item.status = 'queued'; item.error = ''; item.cancelRequested = false; item.pauseRequested = false; this.started = true; this.pump(); this.changed();
   }
   async cancel(key) {
@@ -183,6 +184,7 @@ export class StorageUploadQueue {
         if (possible && !item.metadata.id) {
           item.status = 'duplicate'; this.changed(); const choice = await this.duplicate(item, possible); assertActive(signal);
           if (choice === 'pause') { item.duplicateChecked = false; item.pauseRequested = true; throw abortError(); }
+          if (choice === 'cancel') { item.cancelRequested = true; await this.store?.remove(item.key); throw abortError(); }
           if (choice === 'existing') {
             item.record = possible; await this.onComplete(possible, item); item.status = 'completed'; item.loaded = item.metadata.size; item.speed = 0; await this.save(item); this.changed(); return;
           }

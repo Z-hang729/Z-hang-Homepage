@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import YAML from 'yaml';
 import { validateData as validateOwnerData, validateAsset } from '../src/lib/owner/policy.mjs';
-import { STORAGE_LIMITS, validateFileMetadata } from '../src/lib/files.mjs';
+import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../src/lib/files.mjs';
 
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const collections = ['research', 'notes', 'projects'];
@@ -209,7 +209,7 @@ export async function validateContent(rootDir = process.cwd()) {
   }
   for (const file of await walk(path.join(root,'src','data','files'))) {
     if(!file.endsWith('.json'))continue;
-    try{const data=validateFileMetadata(JSON.parse(await readFile(file,'utf8')));if(path.basename(file)!==`${data.id}.json`)throw new Error('Metadata filename differs from file id.');routes.add(`/files/${data.id}`);for(const [kind,key] of [['research','researchId'],['notes','noteId'],['projects','projectId']])if(data[key]&&!routes.has(`/${kind}/${data[key]}`))throw new Error('File references a missing content page.');}catch(error){report(file,error.message);}
+    try{const data=validateFileMetadata(JSON.parse(await readFile(file,'utf8')));if(path.basename(file)!==`${data.id}.json`)throw new Error('Metadata filename differs from file id.');routes.add(`/files/${data.id}`);for(const kind of collections)for(const slug of fileRelations(data,kind))if(!routes.has(`/${kind}/${slug}`))throw new Error('File references a missing content page.');}catch(error){report(file,error.message);}
   }
   for (const entry of entries) {
     for (const { key, value } of collectUrls(entry.data)) await checkUrl(value, entry.file, key);

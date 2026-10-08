@@ -1,6 +1,7 @@
 import { OwnerError } from './github.mjs';
 import { digest, equalSecret, randomSecret, fromBase64 } from './crypto.mjs';
 import { STORAGE_LIMITS as SHARED_LIMITS, normalizeFileMetadata, previewTypeFor } from '../src/lib/files.mjs';
+import {createStorageAdapters} from './storage-adapters.mjs';
 
 const MiB = 1024 * 1024;
 export const STORAGE_LIMITS = Object.freeze({ githubReleaseBytes: SHARED_LIMITS.releaseBytes, releaseProxyBytes: SHARED_LIMITS.releaseRelayBytes,
@@ -48,7 +49,7 @@ function metadata(params, id, now) {
   if (!Number.isSafeInteger(size) || size < 0) fail('INVALID_FILE_SIZE', '文件大小无效。');
   if (params.sha256 && !/^[a-f0-9]{64}$/i.test(params.sha256)) fail('INVALID_CHECKSUM', 'SHA-256 校验值无效。');
   const date = new Date(now).toISOString();
-  return { id, name, displayName: text(params.displayName || name), originalName: name, description: text(params.description, 5000),
+  const file={ id, name, displayName: text(params.displayName || name), originalName: name, description: text(params.description, 131072),
     relativePath: relativePath(params.relativePath, name), size, mimeType: mimeType(name, params.mimeType), extension: extension(name),
     storageProvider: '', storageKey: '', downloadUrl: '', previewUrl: '', githubReleaseId: null, githubAssetId: null,
     uploadedAt: date, updatedAt: date, sha256: params.sha256?.toLowerCase() || null,
@@ -57,6 +58,11 @@ function metadata(params, id, now) {
     tags: Array.isArray(params.tags) ? params.tags.filter(tag => typeof tag === 'string').map(tag => text(tag, 100)).slice(0, 100) : [],
     visibility: 'public', previewType: previewType(name), folderId: text(params.folderId, 100) || null, folderName: text(params.folderName) || null,
     ...(params.isFolderBundle === true ? { isFolderBundle: true } : {}) };
+  for(const key of ['relatedResearch','relatedNote','relatedProject','authors','year','doi','license','citation','instrument','observationDate','datasetType','telescope','wavelength','cadence','dimensions','units','observationTime','course','project','source','sourceUrl','featured'])if(params[key]!==undefined)file[key]=params[key];
+  // Validate descriptive fields before starting any provider transfer. URLs
+  // below are placeholders only for shared validation and never leave here.
+  const canonical=normalizeFileMetadata({...file,storageProvider:'external-url',downloadUrl:'https://metadata.invalid/file',previewUrl:'https://metadata.invalid/file'});
+  return {...canonical,storageProvider:'',downloadUrl:'',previewUrl:''};
 }
 
 // SigV4 signs exactly one generated object key / part number. Permanent S3
@@ -90,18 +96,14 @@ export async function presignR2(config, key, { partNumber, uploadId, checksumMD5
 }
 
 export class StorageService {
-  constructor(service, bindings = {}) { this.service = service; this.store = service.storage; this.config = service.config; this.bucket = bindings.FILE_BUCKET; this.releaseQueue = Promise.resolve(); }
+  constructor(service, bindings = {}) { this.service = service; this.store = service.storage; this.config = service.config; this.bucket = bindings.FILE_BUCKET; this.adapters=createStorageAdapters(this.config,service.fetcher,this.bucket);this.releaseQueue = Promise.resolve(); }
   get now() { return this.service.now(); }
-  get r2Ready() { return Boolean(this.bucket && this.config.r2AccountId && this.config.r2AccessKeyId && this.config.r2SecretAccessKey && this.config.r2Bucket); }
+  get r2Ready() { return this.adapters.get('external-object-storage').available; }
   get releaseRepo() { return this.config.assetsRepo || this.config.repo; }
   get releaseBase() { return `/repos/${this.config.owner}/${this.releaseRepo}`; }
   publicConfig() {
-    return { defaultProvider: 'github-release', concurrency: 3, limits: STORAGE_LIMITS,
-      providers: [{ id: 'github-repository', available: true, maxFileBytes: SHARED_LIMITS.repositoryPreferredBytes, directUpload: false, multipart: false, existingAssetsOnly: true },
-        { id: 'github-release', available: true, maxFileBytes: STORAGE_LIMITS.releaseProxyBytes, providerMaxFileBytes: STORAGE_LIMITS.githubReleaseBytes, directUpload: false, multipart: false },
-        { id: 'external-object-storage', available: this.r2Ready, maxFileBytes: STORAGE_LIMITS.r2ObjectBytes, directUpload: true, multipart: true,
-          ...(!this.r2Ready ? { reason: 'R2 尚未配置；请在 Storage Help 中启用对象存储。' } : {}) },
-        { id: 'external-url', available: true, maxFileBytes: null, directUpload: false, multipart: false }] };
+    return { defaultProvider: 'github-release', concurrency: 3,concurrencyRange:{min:3,max:6}, limits: STORAGE_LIMITS,
+      providers:[...this.adapters.values()].map(adapter=>adapter.capabilities()) };
   }
   async record(session, id) {
     if (!UUID.test(id || '')) fail('INVALID_UPLOAD_SESSION', '上传会话无效。');
@@ -114,10 +116,12 @@ export class StorageService {
     if (params.id && !UUID.test(params.id)) fail('INVALID_FILE_ID', '替换文件需要有效的稳定文件 ID。');
     const id = params.id && UUID.test(params.id) ? params.id : crypto.randomUUID();
     const file = metadata(params, id, this.now);
+    file.createdBy=session.owner.login||session.owner.id;
     const previous = await this.store.get(`file:${id}`);
     if (previous?.current?.file) {
       const old = previous.current.file;
-      file.versions = [...(Array.isArray(old.versions) ? old.versions : []), { originalName: old.originalName, size: old.size, sha256: old.sha256, uploadedAt: old.uploadedAt, updatedAt: old.updatedAt }];
+      file.version=(old.version||1)+1;file.createdBy=old.createdBy||file.createdBy;
+      file.versions = [...(Array.isArray(old.versions) ? old.versions : []), { version:old.version||1,originalName: old.originalName, size: old.size, sha256: old.sha256, uploadedAt: old.uploadedAt, updatedAt: old.updatedAt }];
     }
     const provider = params.provider || (file.size > STORAGE_LIMITS.releaseProxyBytes ? 'external-object-storage' : 'github-release');
     if (!['github-release', 'external-object-storage'].includes(provider)) fail('INVALID_STORAGE_PROVIDER', '直接上传请使用 GitHub Releases 或对象存储。');
@@ -132,7 +136,7 @@ export class StorageService {
       if (file.size > STORAGE_LIMITS.r2PartBytes) {
         record.partSize = Math.max(STORAGE_LIMITS.r2PartBytes, Math.ceil(file.size / STORAGE_LIMITS.r2Parts / MiB) * MiB);
         record.partCount = Math.ceil(file.size / record.partSize);
-        const multipart = await this.bucket.createMultipartUpload(record.storageKey, { httpMetadata: { contentType: file.mimeType, contentDisposition: attachment(file.originalName) }, customMetadata: { fileId: id, uploadSessionId: sessionId } });
+        const multipart = await this.adapters.get(provider).initiate(record.storageKey, { httpMetadata: { contentType: file.mimeType, contentDisposition: attachment(file.originalName) }, customMetadata: { fileId: id, uploadSessionId: sessionId } });
         record.uploadId = multipart.uploadId;
       }
     } else {
@@ -164,7 +168,7 @@ export class StorageService {
   }
   async releaseAssets(github, releaseId) {
     const assets = [];
-    for (let page = 1; page <= 10; page++) {
+    for (let page = 1; ; page++) {
       const batch = await github.request(`${this.releaseBase}/releases/${releaseId}/assets?per_page=100&page=${page}`);
       assets.push(...batch);
       if (batch.length < 100) break;
@@ -219,10 +223,10 @@ export class StorageService {
         await this.store.put(`upload:${record.sessionId}`, record);
         // A successful completion can lose its HTTP reply. R2's strongly
         // consistent HEAD recovers it without trying to complete a closed ID.
-        const prior = await this.bucket.head(record.storageKey);
-        if (!prior) await this.bucket.resumeMultipartUpload(record.storageKey, record.uploadId).complete(parts);
+        const prior = await this.adapters.get(record.provider).head(record.storageKey);
+        if (!prior) await this.adapters.get(record.provider).resume(record.storageKey, record.uploadId).complete(parts);
       }
-      const object = await this.bucket.head(record.storageKey);
+      const object = await this.adapters.get(record.provider).head(record.storageKey);
       if (!object || object.size !== record.file.size) fail('UPLOAD_SIZE_MISMATCH', '上传后的对象大小与原文件不一致。请重试，未发布文件。', 409);
       record.file.storageProvider = record.provider;
       record.file.storageKey = record.storageKey;
@@ -286,21 +290,7 @@ export class StorageService {
       const prior = existing.find(asset => asset.name === record.assetName && asset.state === 'uploaded' && asset.size === size);
       let asset = prior;
       if (!asset) {
-        const url = new URL(`https://uploads.github.com${this.releaseBase}/releases/${record.releaseId}/assets`);
-        url.searchParams.set('name', record.assetName); url.searchParams.set('label', record.file.originalName.slice(0, 255));
-        // workerd needs a fixed-length stream to send Content-Length upstream.
-        const fixed = typeof FixedLengthStream === 'function' ? new FixedLengthStream(size) : null;
-        let forwarding;
-        if (fixed) forwarding = request.body ? request.body.pipeTo(fixed.writable) : fixed.writable.getWriter().close();
-        // Attach a handler immediately; fetch can reject before pipeTo settles.
-        const forwardingResult = forwarding?.then(() => null, error => error);
-        const response = await this.service.fetcher(url.href, { method: 'POST', duplex: 'half',
-          headers: { Authorization: `Bearer ${github.token}`, 'User-Agent': 'Z-hang-Owner-CMS', 'X-GitHub-Api-Version': '2026-03-10',
-            Accept: 'application/vnd.github+json', 'Content-Type': 'application/octet-stream', 'Content-Length': String(size) },
-          body: fixed ? fixed.readable : request.body });
-        if (forwardingResult) { const error = await forwardingResult; if (error) throw error; }
-        if (!response.ok) fail('STORAGE_PROVIDER_ERROR', `GitHub 附件上传失败（HTTP ${response.status}），可以重试该文件。`, 502);
-        asset = await response.json();
+        asset = await this.adapters.get('github-release').upload(github,{releaseId:record.releaseId,assetName:record.assetName,originalName:record.file.originalName,size,body:request.body});
       } else if (request.body) await request.body.cancel();
       if (!Number.isSafeInteger(asset.id) || asset.size !== size || asset.state !== 'uploaded') fail('UPLOAD_SIZE_MISMATCH', 'GitHub 未确认完整附件。', 409);
       const latest = await this.store.get(`upload:${sessionId}`);
@@ -330,20 +320,27 @@ export class StorageService {
     }
     return { aborted: true };
   }
-  async validateMetadataChanges(changes) {
+  async validateMetadataChanges(changes,{snapshotFiles=[]}={}) {
+    const snapshot=new Map(snapshotFiles.map(file=>[file.path,file]));
     for (const change of changes) {
       const match = /^hub\/src\/data\/files\/([a-f0-9-]+)\.json$/i.exec(change.path);
       if (!match || change.action === 'delete') continue;
-      const file = JSON.parse(change.content);
+      const file = normalizeFileMetadata(JSON.parse(change.content));
+      if(file.storageProvider==='github-repository'){
+        let prior;
+        try{prior=normalizeFileMetadata(JSON.parse(snapshot.get(change.path)?.content||'null'));}catch{}
+        if(!prior||!this.matchesFile({file:prior},file))fail('UNVERIFIED_FILE_METADATA','已有仓库原件只能编辑描述和关联；原始地址及校验值受到保护。',409);
+        continue;
+      }
       const record = await this.store.get(`file:${match[1]}`);
       const candidate = [record?.pending, record?.current].find(asset => asset?.file.storageKey === file.storageKey && asset.file.downloadUrl === file.downloadUrl);
-      if (!candidate || file.id !== match[1] || file.storageProvider !== candidate.file.storageProvider || file.size !== candidate.file.size || file.previewUrl !== candidate.file.previewUrl || file.sha256 !== candidate.file.sha256 || file.githubAssetId !== candidate.file.githubAssetId) fail('UNVERIFIED_FILE_METADATA', '附件元数据必须来自已完成的安全上传或导入。', 409);
+      if (!candidate || !this.matchesFile(candidate,file)) fail('UNVERIFIED_FILE_METADATA', '附件元数据必须来自已完成的安全上传或导入。', 409);
     }
   }
   matchesFile(asset, file) {
     return Boolean(asset?.file && asset.file.id === file.id && asset.file.storageKey === file.storageKey && asset.file.downloadUrl === file.downloadUrl &&
       asset.file.previewUrl === file.previewUrl && asset.file.storageProvider === file.storageProvider && asset.file.size === file.size &&
-      asset.file.sha256 === file.sha256 && asset.file.githubAssetId === file.githubAssetId);
+      asset.file.sha256 === file.sha256 && (asset.file.githubAssetId??null) === (file.githubAssetId??null) && (asset.file.githubReleaseId??null) === (file.githubReleaseId??null) && asset.file.originalName===file.originalName && asset.file.mimeType===file.mimeType);
   }
   async historicAsset(store, file) {
     let cursor;
@@ -352,6 +349,10 @@ export class StorageService {
       for (const [key, asset] of records) { cursor = key; if (this.matchesFile(asset, file)) return asset; }
       if (records.size < 250) return null;
     }
+  }
+  async assetRecords() {
+    const all=new Map();let cursor;
+    while(true){const batch=await this.store.list({prefix:'asset:',limit:250,...(cursor?{startAfter:cursor}:{})});for(const [key,value] of batch){all.set(key,value);cursor=key;}if(batch.size<250)return all;}
   }
   async markPublished(github, changes, sha) {
     const affected = new Map(changes.filter(change => /^hub\/src\/data\/files\/[a-f0-9-]+\.json$/i.test(change.path)).map(change => [change.path, change]));
@@ -442,7 +443,7 @@ export class StorageService {
       ...(download ? { 'Content-Disposition': attachment(published.originalName) } : { 'Content-Disposition': 'inline' }) });
     if (active.provider === 'external-object-storage') {
       if (!this.bucket) fail('STORAGE_UNAVAILABLE', '对象存储暂时不可用。', 503);
-      const object = request.method === 'HEAD' ? await this.bucket.head(active.storageKey) : await this.bucket.get(active.storageKey, range ? { range: request.headers } : {});
+      const object = await this.adapters.get(active.provider).read(active.storageKey,{method:request.method,range:range?request.headers:null});
       if (!object) fail('FILE_NOT_FOUND', '原始对象已不存在。', 404);
       responseHeaders.set('ETag', object.httpEtag);
       responseHeaders.set('Accept-Ranges', 'bytes');
@@ -451,24 +452,24 @@ export class StorageService {
       return new Response(request.method === 'HEAD' ? null : object.body, { status: object.range ? 206 : 200, headers: responseHeaders });
     }
     if (active.provider !== 'github-release') fail('EXTERNAL_PREVIEW_UNAVAILABLE', '请通过原始公开链接下载此文件。', 422);
-    let url = active.file.downloadUrl;
-    let response;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const target = new URL(url);
-      if (!['github.com', 'release-assets.githubusercontent.com', 'objects.githubusercontent.com', 'github-releases.githubusercontent.com'].includes(target.hostname) || target.protocol !== 'https:') fail('INVALID_ASSET_REDIRECT', '附件下载跳转无效。', 502);
-      response = await this.service.fetcher(url, { method: request.method, redirect: 'manual', headers: range ? { Range: range } : {} });
-      if (response.status >= 300 && response.status < 400 && response.headers.get('Location')) { url = new URL(response.headers.get('Location'), url).href; continue; }
-      break;
-    }
+    const response=await this.adapters.get(active.provider).read(active.file.downloadUrl,{method:request.method,range});
     if (!response?.ok) fail('STORAGE_DOWNLOAD_FAILED', '附件下载暂时不可用。', response?.status === 404 ? 404 : 502);
     for (const name of ['Content-Length', 'Content-Range', 'ETag', 'Last-Modified', 'Accept-Ranges']) if (response.headers.has(name)) responseHeaders.set(name, response.headers.get(name));
     return new Response(request.method === 'HEAD' ? null : response.body, { status: response.status, headers: responseHeaders });
   }
   async delete(github, session, params) {
+    await github.verifyOwner();
     const id = params.id || params.fileId;
     if (!UUID.test(id || '')) fail('INVALID_FILE_ID', '文件 ID 无效。');
-    const assets = await this.store.list({ prefix: 'asset:' });
+    const explicit=params.deletePublished===true;
+    const receiptKey=explicit?`file-deleted:${id}:${await digest(params.storageKey||'')}`:null;
+    const operationKey=explicit?`file-delete-operation:${id}:${await digest(params.storageKey||'')}`:null;
+    const receipt=receiptKey?await this.store.get(receiptKey):null;
+    if(receipt&&receipt.ownerId===session.owner.id&&receipt.confirmation===params.confirmation)return {...receipt.result,replayed:true};
+    const assets = await this.assetRecords();
+    const operation=operationKey?await this.store.get(operationKey):null;
     const candidates = [...assets.entries()].filter(([, asset]) => asset.ownerId === session.owner.id && asset.file.id === id && (!params.storageKey || params.storageKey === asset.file.storageKey));
+    if(operation?.ownerId===session.owner.id&&operation.confirmation===params.confirmation)for(const [key,asset]of operation.candidates)if(!candidates.some(([known])=>known===key))candidates.push([key,asset]);
     // Destructive cleanup uses authenticated Git data at a fixed HEAD rather
     // than a CDN result, which can briefly cache a replaced/deleted JSON file.
     const head = await github.head();
@@ -480,7 +481,13 @@ export class StorageService {
       try { published = normalizeFileMetadata(JSON.parse(new TextDecoder().decode(fromBase64((await github.blob(entry.sha)).content)))); }
       catch { fail('FILE_METADATA_UNAVAILABLE', '无法安全核验线上文件引用。', 409); }
     }
-    if (published && candidates.some(([, asset]) => published.storageKey === asset.file.storageKey)) fail('FILE_STILL_REFERENCED', '请先发布删除或替换元数据，再清理原始文件。当前线上下载仍需保留。', 409);
+    if(explicit){
+      if(typeof params.storageKey!=='string'||!params.storageKey||typeof params.confirmation!=='string')fail('DELETE_CONFIRMATION','删除需要确认文件名和原始附件。',409);
+      if(params.expectedHead!==head||params.expectedSha!==(entry?.sha??null))fail('HEAD_CONFLICT','文件或仓库已经更新，没有删除原始附件。请刷新并重新确认。',409);
+      const target=published||candidates.find(([,asset])=>asset.file.storageKey===params.storageKey)?.[1]?.file;
+      if(!target||target.storageKey!==params.storageKey||target.displayName!==params.confirmation)fail('DELETE_CONFIRMATION','确认的文件与当前原始附件不一致，没有删除。',409);
+      if(['github-release','external-object-storage'].includes(target.storageProvider)&&!candidates.some(([,asset])=>asset.file.storageKey===target.storageKey))fail('UNVERIFIED_FILE_METADATA','无法核验这个原始附件的归属，没有删除。',409);
+    }else if (published && candidates.some(([, asset]) => published.storageKey === asset.file.storageKey)) fail('FILE_STILL_REFERENCED', '请先发布删除或替换元数据，再清理原始文件。当前线上下载仍需保留。', 409);
     const destructiveKeys = new Set(candidates.filter(([, asset]) => ['github-release', 'external-object-storage'].includes(asset.provider)).map(([, asset]) => asset.file.storageKey));
     if (destructiveKeys.size) {
       // A manual repository edit can create a second ID pointing to the same
@@ -496,10 +503,21 @@ export class StorageService {
       }
       if (await github.head() !== head) fail('HEAD_CONFLICT', '仓库在清理检查时发生更新，没有删除原始附件。', 409);
     }
+    if(explicit)await this.store.put(operationKey,{ownerId:session.owner.id,confirmation:params.confirmation,candidates,createdAt:this.now});
     for (const [key, asset] of candidates) {
-      if (asset.provider === 'external-object-storage') { if (!this.bucket) fail('STORAGE_UNAVAILABLE', '对象存储未配置。', 503); await this.bucket.delete(asset.storageKey); }
-      if (asset.provider === 'github-release' && asset.githubAssetId) await github.request(`/repos/${this.config.owner}/${asset.releaseRepo}/releases/assets/${asset.githubAssetId}`, { method: 'DELETE' });
+      await this.adapters.get(asset.provider).remove(github,asset);
       await this.store.delete(key);
+    }
+    if(explicit){
+      // Provider failures above leave metadata and the published pointer in
+      // place. Successful results are durable so a lost reply is retryable.
+      const pointer=await this.store.get(`file:${id}`);
+      if(pointer){if(pointer.current?.file.storageKey===params.storageKey)pointer.current=null;if(pointer.pending?.file.storageKey===params.storageKey)pointer.pending=null;await this.store.put(`file:${id}`,pointer);}
+      const originalRetained=['github-repository','external-url'].includes(published?.storageProvider||candidates[0]?.[1]?.provider);
+      const result={deleted:candidates.length,id,providerDeleted:true,metadataPending:true,originalRetained};
+      await this.store.put(receiptKey,{ownerId:session.owner.id,confirmation:params.confirmation,result,createdAt:this.now});
+      await this.store.delete(operationKey);
+      return result;
     }
     if (!published) await this.store.delete(`file:${id}`);
     return { deleted: candidates.length, id };
@@ -526,7 +544,8 @@ export class StorageService {
     }
     const id = crypto.randomUUID();
     const name = params.name || decodeURIComponent(target.pathname.split('/').filter(Boolean).at(-1) || 'external-file');
-    const file = metadata({ ...params, name, size: Number.isSafeInteger(params.size) ? params.size : 0 }, id, this.now);
+    const file = metadata({ ...params,source:params.source||'external-url-import', name, size: Number.isSafeInteger(params.size) ? params.size : 0 }, id, this.now);
+    file.createdBy=session.owner.login||session.owner.id;
     file.storageProvider = 'external-url'; file.storageKey = downloadUrl; file.downloadUrl = downloadUrl; file.previewUrl = downloadUrl;
     file.sourceUrl = url;
     normalizeFileMetadata(file);
@@ -537,12 +556,13 @@ export class StorageService {
   async importAsset(session, params, asset, releaseId) {
     // Re-importing the same remote asset reuses its stable identity, so deleting
     // one catalog record cannot accidentally break a second shared reference.
-    const known = await this.store.list({ prefix: 'asset:' });
+    const known = await this.assetRecords();
     const existing = [...known.values()].find(record => record.ownerId === session.owner.id && record.releaseRepo === this.releaseRepo && record.githubAssetId === asset.id);
     if (existing) return { file: existing.file, existing: true };
     const id = crypto.randomUUID();
     const name = params.name || asset.label || asset.name;
-    const file = normalizeFileMetadata(this.releaseMetadata(metadata({ ...params, name, size: asset.size, mimeType: asset.content_type }, id, this.now), asset, releaseId));
+    const file = normalizeFileMetadata(this.releaseMetadata(metadata({ ...params,source:params.source||'github-release-import', name, size: asset.size, mimeType: asset.content_type }, id, this.now), asset, releaseId));
+    file.createdBy=session.owner.login||session.owner.id;
     const record = { id, sessionId: crypto.randomUUID(), ownerId: session.owner.id, file, provider: 'github-release', storageKey: file.storageKey, releaseId };
     await this.savePending(record);
     return { file };
@@ -551,10 +571,10 @@ export class StorageService {
     const page = Number.isInteger(params.page) && params.page > 0 ? params.page : 1;
     const releases = await github.request(`${this.releaseBase}/releases?per_page=20&page=${page}`);
     const files = [];
-    const known = new Set([...((await this.store.list({ prefix: 'asset:' })).values())].map(asset => asset.githubAssetId));
+    const known = new Set([...(await this.assetRecords()).values()].filter(asset=>asset.releaseRepo===this.releaseRepo).map(asset => asset.githubAssetId));
     for (const release of releases) {
       const assets = await this.releaseAssets(github, release.id);
-      for (const asset of assets) if (!known.has(asset.id) && asset.state === 'uploaded') { files.push((await this.importAsset(session, params, asset, release.id)).file); known.add(asset.id); }
+      for (const asset of assets) if (!known.has(asset.id) && asset.state === 'uploaded') { files.push((await this.importAsset(session, {...params,source:params.source||'github-sync'}, asset, release.id)).file); known.add(asset.id); }
     }
     return { files, nextPage: releases.length === 20 ? page + 1 : null };
   }

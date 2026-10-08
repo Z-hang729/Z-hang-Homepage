@@ -2,6 +2,7 @@ node_modules/
 dist/
 .astro/
 .local/
+public/vendor/pdfjs/
 .env
 .env.*
 !.env.example

@@ -2,7 +2,7 @@ import YAML from 'yaml';
 import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
-import { STORAGE_LIMITS, validateFileMetadata } from '../files.mjs';
+import { STORAGE_LIMITS, validateFileMetadata,fileRelations } from '../files.mjs';
 
 // Shared with browser and Worker: intentionally free of Node APIs.
 export const OWNER_LIMITS = Object.freeze({ fileBytes: STORAGE_LIMITS.repositoryBytes, textBytes: 1048576, batchBytes: STORAGE_LIMITS.metadataRequestBytes, files: Number.MAX_SAFE_INTEGER });
@@ -106,6 +106,6 @@ export function validateChangeSet(input,{snapshotFiles=[],allowTrustedMdx=true,m
   if(bytes>maxBatchBytes) throw ownerError(`The metadata publication exceeds the backend request capacity (${maxBatchBytes/1048576} MiB). Original file bytes belong in the direct upload queue.`,'BATCH_TOO_LARGE',413);
   const resulting=new Set(snapshot.keys()); for(const c of changes) c.action==='delete'?resulting.delete(c.path):resulting.add(c.path); const indexes=new Set(); for(const p of resulting) if(/^hub\/src\/content\/(research|notes|projects)\/[^/]+\/index\.mdx?$/.test(p)) { const id=p.replace(/\.mdx?$/,''); if(indexes.has(id)) throw ownerError('A URL cannot have both index.md and index.mdx.','DUPLICATE_SLUG'); indexes.add(id); }
   for(const c of changes) if(c.action==='upsert' && c.path.startsWith('hub/src/content/logs/')) {const {metadata}=parseFrontmatter(c.content); if(!resulting.has(`hub/src/content/research/${metadata.project}/index.md`) && !resulting.has(`hub/src/content/research/${metadata.project}/index.mdx`)) throw ownerError('Research update must belong to an existing project.');}
-  for(const c of changes)if(c.action==='upsert'&&c.path.startsWith('hub/src/data/files/')){const file=JSON.parse(c.content);for(const [kind,key]of [['research','researchId'],['notes','noteId'],['projects','projectId']])if(file[key]&&!resulting.has(`hub/src/content/${kind}/${file[key]}/index.md`)&&!resulting.has(`hub/src/content/${kind}/${file[key]}/index.mdx`))throw ownerError('File association must refer to an existing content page.','INVALID_FILE_ASSOCIATION');}
+  for(const c of changes)if(c.action==='upsert'&&c.path.startsWith('hub/src/data/files/')){const file=JSON.parse(c.content);for(const kind of CONTENT_KINDS)for(const slug of fileRelations(file,kind))if(!resulting.has(`hub/src/content/${kind}/${slug}/index.md`)&&!resulting.has(`hub/src/content/${kind}/${slug}/index.mdx`))throw ownerError('File association must refer to an existing content page.','INVALID_FILE_ASSOCIATION');}
   return {changes,bytes,paths:changes.map(c=>c.path)};
 }

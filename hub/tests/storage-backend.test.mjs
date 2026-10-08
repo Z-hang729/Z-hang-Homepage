@@ -89,7 +89,12 @@ async function fixture(options = {}) {
       const page = Number(url.searchParams.get('page') || 1);
       return Response.json([...assets.values()].slice((page - 1) * 100, page * 100));
     }
-    if (/\/releases\/assets\/\d+$/.test(url.pathname) && init.method === 'DELETE') { assets.delete(Number(url.pathname.split('/').at(-1))); return new Response(null, { status: 204 }); }
+    if (/\/releases\/assets\/\d+$/.test(url.pathname) && init.method === 'DELETE') {
+      if(options.failDelete)return new Response('Provider temporarily unavailable',{status:503});
+      const removed=assets.delete(Number(url.pathname.split('/').at(-1)));
+      if(options.loseDeleteResponse){options.loseDeleteResponse=false;throw new Error('Fixture delete reply lost after provider removal');}
+      return new Response(null, { status: removed?204:404 });
+    }
     if (url.pathname.endsWith('/git/ref/heads/main')) return Response.json({ object: { type: 'commit', sha: head } });
     if (url.pathname.includes('/git/commits/')) return Response.json({ tree: { sha: head } });
     if (url.pathname.includes('/git/trees/')) return Response.json({ tree: [...source.entries()].map(([path, content], index) => ({ path, sha: String(index + 1).padStart(40, '0'), size: encoder.encode(content).byteLength, type: 'blob', mode: '100644' })) });
@@ -142,6 +147,44 @@ async function fixture(options = {}) {
     advance: ms => { now += ms; }, mutations: () => mutations, uploadRequests: () => uploadRequests };
 }
 const encoder = new TextEncoder();
+
+async function deleteEnvelope(f,file,overrides={}){
+  const snapshot=await (await f.rpc('snapshot')).json();
+  const entry=snapshot.files.find(record=>record.path===`hub/src/data/files/${file.id}.json`);
+  return {id:file.id,storageKey:file.storageKey,deletePublished:true,expectedHead:snapshot.head,expectedSha:entry?.sha??null,confirmation:file.displayName,...overrides};
+}
+test('Explicit confirmed deletion removes provider bytes before metadata and durably recovers a lost reply',async()=>{
+  const f=await fixture({loseDeleteResponse:true});const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);await f.publish(file);
+  const params=await deleteEnvelope(f,file),path=`hub/src/data/files/${file.id}.json`;
+  assert.equal((await f.rpc('storage-delete',{...params,confirmation:'wrong'})).status,409);assert.equal(f.assets.size,1);
+  assert.equal((await f.rpc('storage-delete',{...params,expectedSha:'f'.repeat(40)})).status,409);assert.equal(f.assets.size,1);
+  const lost=await f.rpc('storage-delete',params);assert.equal(lost.status,500);assert.equal(f.assets.size,0);assert.ok(f.source.has(path),'Metadata remains until success is confirmed');
+  const retry=await f.rpc('storage-delete',params);assert.equal(retry.status,200,await retry.clone().text());assert.equal((await retry.json()).providerDeleted,true);assert.ok(f.source.has(path));
+  assert.equal((await f.store.get(`file:${file.id}`)).current,null);
+  assert.equal((await (await f.rpc('storage-delete',params)).json()).replayed,true);
+  const snapshot=await (await f.rpc('snapshot')).json();
+  const response=await f.rpc('publish',{expectedHead:snapshot.head,idempotencyKey:crypto.randomUUID(),changes:[{path,action:'delete',expectedSha:snapshot.files.find(record=>record.path===path).sha}]});
+  assert.equal(response.status,200,await response.clone().text());assert.equal(f.source.has(path),false);
+});
+test('Provider deletion failure and shared references preserve published metadata and live pointers',async()=>{
+  const f=await fixture({failDelete:true});const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);await f.publish(file);
+  const params=await deleteEnvelope(f,file);const failed=await f.rpc('storage-delete',params);assert.equal(failed.status,502);assert.equal(f.assets.size,1);assert.ok(f.source.has(`hub/src/data/files/${file.id}.json`));assert.ok((await f.store.get(`file:${file.id}`)).current);
+  const shared=normalizeFileForTest(file,{id:crypto.randomUUID()});f.source.set(`hub/src/data/files/${shared.id}.json`,JSON.stringify(shared));
+  const response=await f.rpc('storage-delete',await deleteEnvelope(f,file));assert.equal(response.status,409);assert.equal((await response.json()).error.code,'FILE_SHARED_REFERENCE');assert.equal(f.assets.size,1);
+});
+function normalizeFileForTest(file,overrides){return {...file,...overrides,slug:overrides.id||file.id};}
+test('Legacy repository originals support metadata-only edits/removal without rewriting source URLs',async()=>{
+  const f=await fixture();const file={id:crypto.randomUUID(),name:'Original.png',displayName:'Original.png',originalName:'Original.png',relativePath:'images/Original.png',size:4,mimeType:'image/png',extension:'png',storageProvider:'github-repository',storageKey:'repository:hub/public/uploads/images/Original.png',downloadUrl:'/uploads/images/Original.png',previewUrl:'/uploads/images/Original.png',uploadedAt:'2026-10-01T00:00:00Z',updatedAt:'2026-10-01T00:00:00Z',sha256:null,category:'general',researchId:null,noteId:null,projectId:null,tags:[],visibility:'public',previewType:'image'};
+  const path=`hub/src/data/files/${file.id}.json`;f.source.set(path,JSON.stringify(file));
+  await f.publish({...file,description:'Updated caption',tags:['Physics']});
+  await assert.rejects(()=>f.publish({...file,downloadUrl:'/uploads/images/different.png'}),/UNVERIFIED_FILE_METADATA/);
+  const deleted=await (await f.rpc('storage-delete',await deleteEnvelope(f,{...file,description:'Updated caption'}))).json();assert.equal(deleted.providerDeleted,true);assert.equal(deleted.originalRetained,true);assert.ok(f.source.has(path));
+});
+test('Release import deduplicates the same asset beyond the first thousand durable records',async()=>{
+  const f=await fixture();const upload=await f.start();await f.upload(upload);const file=await f.complete(upload);
+  for(let index=0;index<1005;index++)await f.store.put(`asset:!older-${String(index).padStart(5,'0')}`,{ownerId:-1,releaseRepo:'other',githubAssetId:10000+index,file:{id:crypto.randomUUID()}});
+  const response=await f.rpc('storage-import',{url:file.downloadUrl});assert.equal(response.status,200,await response.clone().text());const imported=await response.json();assert.equal(imported.existing,true);assert.equal(imported.file.id,file.id);assert.equal(f.uploadRequests(),1);
+});
 
 test('Concurrent upload preparation shares one Release, reserves capacity and keeps binary transfers parallel', async () => {
   let unblock; const barrier = new Promise(resolve => { unblock = resolve; });

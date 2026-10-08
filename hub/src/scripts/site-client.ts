@@ -26,6 +26,14 @@ const dialog = document.querySelector("#search-dialog") as HTMLDialogElement;
 let searchLoaded = false;
 async function openSearch() {
   dialog?.showModal();
+  if(dialog&&!dialog.querySelector('[data-library-search-command]')){
+    const command=document.createElement('a');
+    command.href=`${base.replace(/\/$/,'')}/files/?focus=search`;
+    command.textContent='Search Files ↗';
+    command.dataset.librarySearchCommand='';
+    command.style.cssText='display:inline-flex;margin:0 0 1rem;color:var(--accent);font-size:.9rem';
+    document.querySelector('#global-search')?.before(command);
+  }
   if (searchLoaded) return;
   try {
     if (import.meta.env.DEV) {

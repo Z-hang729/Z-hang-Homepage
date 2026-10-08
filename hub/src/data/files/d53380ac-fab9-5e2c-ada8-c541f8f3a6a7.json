@@ -1,0 +1,41 @@
+{
+  "id": "d53380ac-fab9-5e2c-ada8-c541f8f3a6a7",
+  "name": "Electromagnetism.png",
+  "displayName": "Electromagnetism.png",
+  "originalName": "Electromagnetism.png",
+  "description": "",
+  "relativePath": "images/a12c0c30-3db8-4f3d-bf45-dad47077423b/Electromagnetism.png",
+  "size": 2682488,
+  "mimeType": "image/png",
+  "extension": "png",
+  "storageProvider": "github-repository",
+  "storageKey": "repository:hub/public/uploads/images/a12c0c30-3db8-4f3d-bf45-dad47077423b/Electromagnetism.png",
+  "downloadUrl": "/uploads/images/a12c0c30-3db8-4f3d-bf45-dad47077423b/Electromagnetism.png",
+  "previewUrl": "/uploads/images/a12c0c30-3db8-4f3d-bf45-dad47077423b/Electromagnetism.png",
+  "githubReleaseId": null,
+  "githubAssetId": null,
+  "uploadedAt": "2026-10-08T03:00:05.493Z",
+  "updatedAt": "2026-10-08T03:00:05.493Z",
+  "sha256": "2df440d1ee7e83de6766cce6a4f5fd386fe654514d6147e86d8512d4eda9134e",
+  "category": "notes",
+  "researchId": null,
+  "noteId": "electrodynamics",
+  "projectId": null,
+  "tags": [
+    "Physics",
+    "Electromagnetism",
+    "Course Notes"
+  ],
+  "visibility": "public",
+  "previewType": "image",
+  "slug": "d53380ac-fab9-5e2c-ada8-c541f8f3a6a7",
+  "checksum": "2df440d1ee7e83de6766cce6a4f5fd386fe654514d6147e86d8512d4eda9134e",
+  "createdBy": "owner",
+  "version": 1,
+  "source": "legacy-repository",
+  "relatedResearch": [],
+  "relatedNote": [
+    "electrodynamics"
+  ],
+  "relatedProject": []
+}

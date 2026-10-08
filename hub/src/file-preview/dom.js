@@ -1,0 +1,12 @@
+import {originalDownloadURL} from '../lib/files.mjs';
+export const node=(tag,text,attrs={})=>{const element=document.createElement(tag);if(text!==undefined)element.textContent=String(text);for(const [key,value]of Object.entries(attrs))element.setAttribute(key,String(value));return element;};
+export function button(text,action,attrs={}){const control=node('button',text,{type:'button',...attrs});control.addEventListener('click',action);return control;}
+export function toolbar(){return node('div',undefined,{class:'file-viewer-toolbar',role:'group','aria-label':'Preview controls'});}
+export function resolveFileURL(value){const base=import.meta.env.BASE_URL;return value.startsWith('/')&&!value.startsWith('//')&&base!=='/'&&!value.startsWith(base)?base.replace(/\/$/,'')+value:value;}
+export function downloadLink(file){return node('a','Download original',{href:resolveFileURL(originalDownloadURL(file)),class:'file-viewer-download',download:file.originalName,rel:'noopener noreferrer'});}
+export function copyButton(getText,label='Copy source'){const control=button(label,async()=>{try{await navigator.clipboard.writeText(getText());control.textContent='Copied';}catch{control.textContent='Copy unavailable';}setTimeout(()=>control.textContent=label,1800);});return control;}
+export function fullscreenButton(target){return button('Fullscreen',()=>target.requestFullscreen?.().catch(()=>{}),{'aria-label':'Open preview fullscreen'});}
+export function fallback(host,message){host.append(node('p',message||'This type is available as an original download.',{class:'file-viewer-notice'}));}
+
+// Pointer dragging scrolls the preview surface; touch retains native pinch/scroll.
+export function makePannable(surface){let state=null;surface.tabIndex=0;surface.setAttribute('aria-label','Preview surface. Drag to pan, or use arrow keys to scroll.');surface.addEventListener('pointerdown',event=>{if(event.pointerType!=='mouse'||event.button!==0)return;state={x:event.clientX,y:event.clientY,left:surface.scrollLeft,top:surface.scrollTop};surface.setPointerCapture(event.pointerId);surface.classList.add('is-panning');event.preventDefault();});surface.addEventListener('pointermove',event=>{if(!state)return;surface.scrollLeft=state.left-(event.clientX-state.x);surface.scrollTop=state.top-(event.clientY-state.y);});const stop=()=>{state=null;surface.classList.remove('is-panning');};surface.addEventListener('pointerup',stop);surface.addEventListener('pointercancel',stop);}

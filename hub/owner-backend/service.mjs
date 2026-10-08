@@ -235,7 +235,7 @@ export class OwnerService {
     const contentPaths = new Set(params.changes.map(change => change.path));
     const snapshot = await this.snapshot(github, actualHead, contentPaths);
     const normalized = validateChangeSet(params.changes, { snapshotFiles: new Map(snapshot.files.map(file => [file.path, file])), allowTrustedMdx: true });
-    await this.files.validateMetadataChanges(normalized.changes);
+    await this.files.validateMetadataChanges(normalized.changes,{snapshotFiles:snapshot.files});
     await this.storage.put(key, { fingerprint, expectedHead: actualHead, expiresAt: this.now() + 86400000 });
     try {
       const commit = await github.commit(actualHead, normalized.changes, message, publicationId);

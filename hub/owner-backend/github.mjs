@@ -18,12 +18,14 @@ export class GitHub {
   }
 
   async request(path, options = {}) {
+    const {allowNotFound=false,...requestOptions}=options;
     const response = await this.fetcher(`https://api.github.com${path}`, {
-      ...options,
+      ...requestOptions,
       headers: { Accept: 'application/vnd.github+json', 'Content-Type': 'application/json',
         'User-Agent': 'Z-hang-Owner-CMS', 'X-GitHub-Api-Version': '2026-03-10',
         Authorization: `Bearer ${this.token}`, ...options.headers },
     });
+    if(allowNotFound&&response.status===404){await response.body?.cancel();return null;}
     if (!response.ok) {
       const retryAfter = response.headers.get('Retry-After');
       const code = response.status === 401 ? 'AUTH_EXPIRED' : response.status === 429 || retryAfter ? 'GITHUB_RATE_LIMIT' : 'GITHUB_ERROR';

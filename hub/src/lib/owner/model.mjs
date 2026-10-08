@@ -3,6 +3,7 @@ import { unified } from 'unified';
 import remarkParse from 'remark-parse';
 import remarkMath from 'remark-math';
 import { CONTENT_KINDS, DEFAULT_HOMEPAGE, assertAllowedPath, assertSlug, safeRelativePath, parseFrontmatter, parseYAML, validateMetadata, validateData, validateMarkdownBody, validateAsset, validateChangeSet, snapshotIndex, ownerError, utf8Bytes, decodeBase64, OWNER_LIMITS, assertSafeURL } from './policy.mjs';
+import { fileRelations,withFileRelations } from '../files.mjs';
 
 const parser = unified().use(remarkParse).use(remarkMath);
 const prefix = 'hub/src/content/';
@@ -135,11 +136,11 @@ export function deleteEntryChanges(snapshot,{kind,slug,confirmation}) {
   const file=entryFile(snapshot,kind,slug); if(!file) throw ownerError('The article no longer exists.'); const entry=parseContentFile(file);
   if(confirmation!==entry.metadata.title) throw ownerError('Enter the exact article title to confirm deletion.','DELETE_CONFIRMATION');
   const roots=[`${prefix}${kind}/${slug}/`,`hub/public/uploads/${kind}/${slug}/`,...(kind==='research'?[`${prefix}logs/${slug}/`]:[])];
-  const changes=[...filesOf(snapshot).keys()].filter(path=>roots.some(root=>path.startsWith(root))).map(path=>deleteFor(snapshot,path));
+  const libraryOriginals=new Set([...filesOf(snapshot).values()].filter(record=>/^hub\/src\/data\/files\/.+\.json$/.test(record.path)&&record.content).map(record=>JSON.parse(record.content)).filter(record=>record.storageProvider==='github-repository').flatMap(record=>[record.downloadUrl,record.previewUrl].filter(url=>url?.startsWith('/uploads/')).map(url=>'hub/public/'+decodeURIComponent(url.slice(1)))));
+  const changes=[...filesOf(snapshot).keys()].filter(path=>roots.some(root=>path.startsWith(root))&&!libraryOriginals.has(path)).map(path=>deleteFor(snapshot,path));
   // Removing a page detaches its independently stored files instead of losing
   // originals or leaving metadata links that would break the next build.
-  const association={research:'researchId',notes:'noteId',projects:'projectId'};
-  for(const record of filesOf(snapshot).values())if(/^hub\/src\/data\/files\/.+\.json$/.test(record.path)&&record.content){const metadata=JSON.parse(record.content);if(metadata[association[kind]]!==slug)continue;metadata[association[kind]]=null;if(metadata.category===kind)metadata.category=CONTENT_KINDS.find(k=>metadata[association[k]])||'general';metadata.updatedAt=new Date().toISOString();changes.push(changeFor(snapshot,record.path,JSON.stringify(metadata,null,2)+'\n'));}
+  for(const record of filesOf(snapshot).values())if(/^hub\/src\/data\/files\/.+\.json$/.test(record.path)&&record.content){let metadata=JSON.parse(record.content);if(!fileRelations(metadata,kind).includes(slug))continue;metadata=withFileRelations(metadata,kind,fileRelations(metadata,kind).filter(id=>id!==slug));if(metadata.category===kind&&!fileRelations(metadata,kind).length)metadata.category=CONTENT_KINDS.find(k=>fileRelations(metadata,k).length)||'general';metadata.updatedAt=new Date().toISOString();changes.push(changeFor(snapshot,record.path,JSON.stringify(metadata,null,2)+'\n'));}
   return changes;
 }
 export function createLogChanges(snapshot,{project,metadata={},body='',slug}) {

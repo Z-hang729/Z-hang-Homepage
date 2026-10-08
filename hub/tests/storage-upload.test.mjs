@@ -187,3 +187,38 @@ test('Windows directory drops read every directory batch without a 1000-file cap
   const selected = await selectionsFromDrop([{ entry: parent }]); assert.equal(selected.length, 1005); assert.ok(selected.every(item => item.path.startsWith('Folder name/Original science data/')));
   assert.throws(() => validateUploadPath('../escape.dat'), /relative filename/); assert.throws(() => validateUploadPath('folder\\escape.dat'), /relative filename/);
 });
+
+test('Owner concurrency control accepts three to six concurrent files and clamps invalid choices', async () => {
+  const queue = new StorageUploadQueue({ transport: backend(), hash: fastHash, send: immediateSend });
+  assert.equal(queue.setConcurrency(6), 6); assert.equal(queue.setConcurrency(100), 6); assert.equal(queue.setConcurrency(1), 3); assert.equal(queue.setConcurrency(NaN), 3);
+  let active = 0, maximum = 0;
+  queue.send = async (...args) => { maximum = Math.max(maximum, ++active); await new Promise(resolve => setTimeout(resolve, 4)); active--; return immediateSend(...args); };
+  queue.setConcurrency(6); queue.add(Array.from({ length: 24 }, (_, index) => ({ file: makeFile(`concurrent-${index}.dat`, 1), path: `concurrent-${index}.dat` }))); queue.start();
+  await until(() => queue.summary().completed === 24); assert.equal(maximum, 6);
+});
+
+test('Explicit duplicate cancellation stops before creating or uploading an asset', async () => {
+  const file = makeFile(), transport = backend(), queue = new StorageUploadQueue({ transport, hash: fastHash, existing: () => [{ id: 'existing', name: file.name, size: file.size, sha256: checksum(file.name) }], duplicate: async () => 'cancel', send: () => { throw Error('Cancelled duplicate must not upload.'); } });
+  queue.add([{ file, path: file.name }]); queue.start(); await until(() => queue.items[0].status === 'cancelled');
+  assert.equal(transport.calls.length, 0); assert.equal(queue.summary().completed, 0);
+});
+
+test('100 MiB and 1 GiB mocked originals transfer in bounded multipart slices with retry and progress', async () => {
+  let maximumRead = 0, maximumSlice = 0, reads = 0;
+  function virtualFile(name, size) {
+    function slice(start = 0, end = size) { const length = Math.max(0, Math.min(end, size) - start); maximumSlice = Math.max(maximumSlice, length); return { size: length, slice: (from = 0, to = length) => slice(start + from, Math.min(start + to, end)), async arrayBuffer() { maximumRead = Math.max(maximumRead, length); reads++; return new ArrayBuffer(length); } }; }
+    return { name, size, type: 'application/octet-stream', lastModified: 1, slice, arrayBuffer() { throw Error('Do not read a whole large original.'); } };
+  }
+  const transport = backend({ multipart: true, partSize: 16 * 1024 * 1024 }), store = memoryStore(), sizes = [100 * 1024 * 1024, 1024 * 1024 * 1024];
+  let sends = 0, retried = false, progressed = false;
+  const queue = new StorageUploadQueue({ transport, store, hash: fastHash, onChange: queue => { if (queue.summary().uploadedBytes > 0 && queue.summary().completed < 2) progressed = true; }, send: async (target, blob, callbacks) => {
+    sends++; if (!retried && target.url.includes('/part/2?')) { retried = true; throw Object.assign(new Error('Mock transient part failure.'), { status: 503 }); }
+    callbacks.onProgress(Math.floor(blob.size / 2)); return immediateSend(target, blob, callbacks);
+  } });
+  queue.add(sizes.map((size, index) => ({ file: virtualFile(`large-${index}.fits`, size), path: `Bounded originals/large-${index}.fits` }))); queue.start();
+  await until(() => queue.summary().completed === 2, 'Large multipart mock did not complete');
+  assert.equal(queue.summary().totalBytes, sizes[0] + sizes[1]); assert.equal(queue.summary().uploadedBytes, sizes[0] + sizes[1]);
+  assert.equal(maximumSlice, 16 * 1024 * 1024); assert.equal(maximumRead, 8 * 1024 * 1024); assert.ok(reads > 100); assert.ok(retried); assert.ok(progressed);
+  assert.equal(sends, Math.ceil(sizes[0] / (16 * 1024 * 1024)) + 64 + 1); assert.equal(transport.calls.filter(call => call.method === 'storage-start').length, 2);
+  assert.ok(!JSON.stringify([...store.records.values()]).includes('temporary-upload-capability'));
+});

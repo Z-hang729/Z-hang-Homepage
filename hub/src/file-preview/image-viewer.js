@@ -1,0 +1,8 @@
+import {node,toolbar,button,downloadLink,fullscreenButton,makePannable} from './dom.js';
+export function imageControls(surface,image,{width,height},file){const controls=toolbar(),zoom=node('input',undefined,{type:'range',min:'1',max:'400',value:'100','aria-label':'Image zoom'}),label=node('span','100%');function apply(value){const scale=Math.max(0.01,Math.min(4,value));image.style.width=`${Math.round(width*scale)}px`;image.style.height=`${Math.round(height*scale)}px`;image.style.maxWidth='none';label.textContent=`${Math.round(scale*100)}%`;zoom.value=String(Math.round(scale*100));}const fit=()=>apply(Math.min(1,Math.max(0.01,(surface.clientWidth-24)/width)));zoom.addEventListener('input',()=>apply(Number(zoom.value)/100));controls.append(node('span','Zoom'),zoom,label,button('Fit width',fit),button('100%',()=>apply(1)),fullscreenButton(surface));if(file)controls.append(downloadLink(file));makePannable(surface);requestAnimationFrame(fit);return controls;}
+export async function renderImageViewer({file,src,host}) {
+ if(file.size>32*1024*1024)throw new Error('Image preview is limited to 32 MB to protect browser memory. Download the original image.');
+ const surface=node('div',undefined,{class:'file-image-canvas file-visual-surface'}),image=node('img',undefined,{alt:file.displayName,referrerpolicy:'no-referrer',draggable:'false'});surface.append(image);host.append(surface);
+ await new Promise((resolve,reject)=>{image.onload=resolve;image.onerror=()=>reject(new Error('Preview unavailable for this image format or server. Download the original image.'));image.src=src;});
+ host.prepend(imageControls(surface,image,{width:image.naturalWidth,height:image.naturalHeight},file));
+}

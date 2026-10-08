@@ -4,7 +4,7 @@ import {url} from '../lib/site';
 const local=import.meta.env.DEV;
 const backend=import.meta.env.PUBLIC_OWNER_BACKEND_URL||'';
 ---
-<BaseLayout title="Owner workspace" description="Manage your academic website.">
+<BaseLayout title="Owner workspace" description="Manage your academic website." noindex>
   <div class="container owner-entry" data-owner-dashboard data-owner-backend={backend} data-owner-local={String(local)}>
     <div data-owner-login>
       <p class="eyebrow">OWNER WORKSPACE</p><h1>Your academic garden.</h1>

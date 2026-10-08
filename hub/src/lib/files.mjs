@@ -19,7 +19,38 @@ export const STORAGE_LIMITS = Object.freeze({
 export const FILE_METADATA_DIRECTORY = 'hub/src/data/files';
 export const STORAGE_PROVIDERS = ['github-repository','github-release','external-object-storage','external-url'];
 const activeExtensions = new Set('html htm svg svgz xhtml xml exe msi bat cmd com scr dll ps1 js mjs cjs vbs jar wasm swf'.split(' '));
-const textExtensions = new Set('txt py pro c cpp h hpp java js ts jsx tsx m r f f90 tex yaml yml bib log dat sav sql sh ps1 ini cfg toml'.split(' '));
+const textExtensions = new Set('txt py pyw pro c cpp cc cxx h hpp java js mjs cjs ts jsx tsx m r jl go rs f f77 f90 f95 for tex latex yaml yml bib log dat sql sh ps1 ini cfg toml css scss less rb pl lua ipf'.split(' '));
+export const FILE_RELATION_KEYS = Object.freeze({research:'relatedResearch',notes:'relatedNote',projects:'relatedProject'});
+const legacyRelationKeys = {research:'researchId',notes:'noteId',projects:'projectId'};
+const academicTextKeys = ['doi','license','citation','instrument','observationDate','datasetType','telescope','wavelength','units','observationTime','course','project','folderDescription','coverFileId'];
+export function fileRelations(file,kind) {
+  const key=FILE_RELATION_KEYS[kind];
+  if(!key)return [];
+  const value=file[key]===undefined?(file[legacyRelationKeys[kind]]?[file[legacyRelationKeys[kind]]]:[]):file[key];
+  if(!Array.isArray(value))throw new Error(`${key} must be a list of content slugs.`);
+  return [...new Set(value)];
+}
+export const relatedFileIds = fileRelations;
+export function withFileRelations(file,kind,slugs) {
+  if(!FILE_RELATION_KEYS[kind])throw new Error('Invalid file relation kind.');
+  return {...file,[FILE_RELATION_KEYS[kind]]:[...new Set(slugs)],[legacyRelationKeys[kind]]:slugs[0]||null};
+}
+export function fileGroup(file) {
+  const ext=file.extension||fileExtension(file.originalName||file.name||'');
+  if(file.previewType==='pdf')return 'pdf';
+  if(['tif','tiff','heic','heif','eps','ps','svg','svgz'].includes(ext)||file.previewType==='image')return 'images';
+  if(file.previewType==='markdown')return 'notes';
+  if(file.previewType==='notebook')return 'notebooks';
+  if(/^(zip|tar|gz|tgz|bz2|xz|7z|rar|zst)$/.test(ext))return 'archives';
+  if(/^(fits|fit|fts|h5|hdf|hdf5|nc|netcdf|cdf|npy|npz|mat|sav|idl|dat|csv|tsv|parquet|feather|arrow)$/.test(ext))return 'data';
+  if(['audio','video'].includes(file.previewType))return 'media';
+  if(['office'].includes(file.previewType)||['txt','rtf','tex','latex','bib'].includes(ext))return 'documents';
+  if(file.previewType==='text'||file.previewType==='json'||['html','htm','xml','yaml','yml'].includes(ext))return 'code';
+  return 'other';
+}
+export function fileSearchText(file,extra='') {
+  return [file.name,file.displayName,file.originalName,file.description,file.relativePath,file.folderName,file.extension,file.mimeType,file.category,fileGroup(file),...(file.tags||[]),...Object.keys(FILE_RELATION_KEYS).flatMap(kind=>fileRelations(file,kind)),...(file.authors||[]),...academicTextKeys.map(key=>file[key]),file.year,extra].filter(value=>value!=null).join(' ').normalize('NFKC').toLocaleLowerCase();
+}
 export function fileExtension(name='') { return String(name).split('/').pop().split('.').length>1?String(name).split('.').pop().toLowerCase():''; }
 export function previewTypeFor(name='',mime='') {
   const ext=fileExtension(name);
@@ -52,20 +83,31 @@ export function assertFileURL(value,{relative=false}={}) {
   return value;
 }
 export function normalizeFileMetadata(raw,now=new Date().toISOString()) {
+  if(raw.sha256&&raw.checksum&&String(raw.sha256).toLowerCase()!==String(raw.checksum).toLowerCase())throw new Error('Checksum must match SHA256.');
   const name=raw.originalName||raw.name;
   const result={id:raw.id,name:raw.name||name,displayName:raw.displayName||name,originalName:name,description:raw.description||'',relativePath:raw.relativePath||name,
     size:raw.size??0,mimeType:raw.mimeType||'application/octet-stream',extension:fileExtension(name),storageProvider:raw.storageProvider||raw.provider,
     storageKey:raw.storageKey||'',downloadUrl:raw.downloadUrl,previewUrl:raw.previewUrl||raw.downloadUrl,
     githubReleaseId:raw.githubReleaseId??null,githubAssetId:raw.githubAssetId??null,
-    uploadedAt:raw.uploadedAt||now,updatedAt:raw.updatedAt||now,sha256:raw.sha256||null,
+    uploadedAt:raw.uploadedAt||now,updatedAt:raw.updatedAt||raw.uploadedAt||now,sha256:raw.sha256||raw.checksum||null,
     category:raw.category||'general',researchId:raw.researchId||null,noteId:raw.noteId||null,projectId:raw.projectId||null,
     tags:raw.tags||[],visibility:raw.visibility||'public',previewType:previewTypeFor(name,raw.mimeType||'')};
-  for(const key of ['folderId','folderName','folderDownloadUrl','isFolderBundle','versions','sourceUrl'])if(raw[key]!==undefined)result[key]=raw[key];
+  result.slug=raw.slug||raw.id;
+  result.checksum=result.sha256;
+  result.createdBy=raw.createdBy??'owner';
+  result.version=raw.version??1;
+  result.source=raw.source||'upload';
+  for(const kind of Object.keys(FILE_RELATION_KEYS)){
+    result[FILE_RELATION_KEYS[kind]]=fileRelations(raw,kind);
+    result[legacyRelationKeys[kind]]=result[FILE_RELATION_KEYS[kind]][0]||null;
+  }
+  for(const key of ['folderId','folderName','folderDownloadUrl','isFolderBundle','versions','sourceUrl','authors','year',...academicTextKeys,'cadence','dimensions','featured','isDerivative','parentFileId'])if(raw[key]!==undefined)result[key]=raw[key];
   return validateFileMetadata(result);
 }
 export function validateFileMetadata(file) {
   if(!file||typeof file!=='object'||Array.isArray(file))throw new Error('File metadata must be an object.');
   stableFilePath(file.id);
+  if(file.slug!==undefined)stableFilePath(file.slug);
   for(const key of ['name','displayName','originalName'])if(typeof file[key]!=='string'||!file[key]||file[key].length>1024||/[\u0000-\u001f\u007f]/u.test(file[key]))throw new Error(`Invalid ${key}.`);
   safeFilePath(file.relativePath);
   if(!Number.isSafeInteger(file.size)||file.size<0||file.size>STORAGE_LIMITS.objectBytes)throw new Error('Invalid file size.');
@@ -78,7 +120,22 @@ export function validateFileMetadata(file) {
   if(file.visibility==='private')throw new Error('This public site supports public or unlisted files. Keep private research in private storage.');
   if(!['general','research','notes','projects'].includes(file.category))throw new Error('Invalid file category.');
   for(const key of ['researchId','noteId','projectId','folderId'])if(file[key]!=null&&!(typeof file[key]==='string'&&/^[a-z0-9][a-z0-9-]{0,99}$/.test(file[key])))throw new Error(`Invalid ${key}.`);
+  for(const kind of Object.keys(FILE_RELATION_KEYS))for(const slug of fileRelations(file,kind))if(typeof slug!=='string'||!/^[a-z0-9][a-z0-9-]{0,99}$/.test(slug))throw new Error(`Invalid ${FILE_RELATION_KEYS[kind]}.`);
   if(file.sha256!=null&&!/^[a-f0-9]{64}$/i.test(file.sha256))throw new Error('Invalid SHA256.');
+  if(file.checksum!=null&&(!/^[a-f0-9]{64}$/i.test(file.checksum)||file.sha256&&file.checksum.toLowerCase()!==file.sha256.toLowerCase()))throw new Error('Checksum must match SHA256.');
+  if(file.version!==undefined&&(!Number.isSafeInteger(file.version)||file.version<1))throw new Error('Version must be a positive integer.');
+  if(file.createdBy!==undefined&&!(typeof file.createdBy==='string'&&file.createdBy.length<=200||Number.isSafeInteger(file.createdBy)&&file.createdBy>0))throw new Error('Invalid createdBy.');
+  if(file.source!==undefined&&(typeof file.source!=='string'||file.source.length>1024))throw new Error('Invalid source.');
+  if(file.description!==undefined&&(typeof file.description!=='string'||file.description.length>131072))throw new Error('Description must be Markdown text up to 128 KiB.');
+  for(const key of academicTextKeys)if(file[key]!=null&&(typeof file[key]!=='string'||file[key].length>(key==='citation'||key==='folderDescription'?32768:2048)))throw new Error(`Invalid ${key}.`);
+  if(file.authors!==undefined&&(!Array.isArray(file.authors)||file.authors.some(author=>typeof author!=='string'||author.length>500)))throw new Error('Authors must be a list of names.');
+  if(file.year!=null&&!(Number.isInteger(file.year)&&file.year>=0&&file.year<=9999||typeof file.year==='string'&&file.year.length<=100))throw new Error('Invalid year.');
+  if(file.cadence!=null&&!(typeof file.cadence==='string'&&file.cadence.length<=200||typeof file.cadence==='number'&&Number.isFinite(file.cadence)&&file.cadence>=0))throw new Error('Invalid cadence.');
+  if(file.dimensions!=null&&!(typeof file.dimensions==='string'&&file.dimensions.length<=500||Array.isArray(file.dimensions)&&file.dimensions.length<=32&&file.dimensions.every(value=>Number.isSafeInteger(value)&&value>0)))throw new Error('Invalid dimensions.');
+  if(file.sourceUrl)assertFileURL(file.sourceUrl);
+  if(file.versions!==undefined&&(!Array.isArray(file.versions)||file.versions.some(version=>!version||typeof version!=='object'||Array.isArray(version))))throw new Error('Versions must be a list of metadata records.');
+  for(const key of ['featured','isDerivative','isFolderBundle'])if(file[key]!==undefined&&typeof file[key]!=='boolean')throw new Error(`Invalid ${key}.`);
+  if(file.parentFileId!=null)stableFilePath(file.parentFileId);
   if(!Array.isArray(file.tags)||file.tags.some(t=>typeof t!=='string'||t.length>100))throw new Error('Invalid tags.');
   if(typeof file.mimeType!=='string'||!/^[a-z0-9.+-]+\/[a-z0-9.+-]+$/i.test(file.mimeType))throw new Error('Invalid MIME type.');
   for(const key of ['uploadedAt','updatedAt'])if(typeof file[key]!=='string'||!Number.isFinite(Date.parse(file[key])))throw new Error(`Invalid ${key}.`);
@@ -97,5 +154,5 @@ export function routeStorage(file,config={}) {
 }
 export function readFileRecords(snapshot) {
   const files=snapshot?.files??snapshot??[];const entries=files instanceof Map?[...files.values()]:files;
-  return entries.filter(f=>/^hub\/src\/data\/files\/[a-z0-9-]+\.json$/.test(f.path)&&f.content).map(f=>({...validateFileMetadata(JSON.parse(f.content)),metadataPath:f.path,expectedSha:f.sha??null}));
+  return entries.filter(f=>/^hub\/src\/data\/files\/[a-z0-9-]+\.json$/.test(f.path)&&f.content).map(f=>({...normalizeFileMetadata(JSON.parse(f.content)),metadataPath:f.path,expectedSha:f.sha??null}));
 }

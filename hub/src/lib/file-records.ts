@@ -1,7 +1,8 @@
-import { validateFileMetadata } from './files.mjs';
+import { normalizeFileMetadata,fileRelations } from './files.mjs';
 const modules=import.meta.glob('../data/files/*.json',{eager:true,import:'default'});
-export function getFiles({kind,slug}:{kind?:string;slug?:string}={}) {
-  return Object.values(modules).map(value=>validateFileMetadata(value)).filter(file=>file.visibility!=='private')
-    .filter(file=>!kind||Boolean(slug)||file.category===kind).filter(file=>!slug||file[{research:'researchId',notes:'noteId',projects:'projectId'}[kind||'']||'id']===slug)
+export function getFiles({kind,slug,includeUnlisted=false}:{kind?:string;slug?:string;includeUnlisted?:boolean}={}) {
+  return Object.values(modules).map(value=>normalizeFileMetadata(value)).filter(file=>file.visibility==='public'||includeUnlisted&&file.visibility==='unlisted')
+    .filter(file=>!file.isDerivative)
+    .filter(file=>!kind||Boolean(slug)||file.category===kind).filter(file=>!slug||(kind?fileRelations(file,kind).includes(slug):file.id===slug))
     .sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
 }
