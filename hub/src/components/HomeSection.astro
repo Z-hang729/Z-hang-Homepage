@@ -14,7 +14,7 @@ const id = section.id;
     <h1><span data-owner-field="heroFirstLine">{profile.heroFirstLine}</span><br/><em data-owner-field="heroSecondLine">{profile.heroSecondLine}</em></h1>
     <p class="hero-subtitle"><strong><span data-owner-field="displayName">{profile.displayName}</span> · <span data-owner-field="university">{profile.university}</span></strong><br/><span data-owner-field="role">{profile.role}</span><br/><span data-owner-field="degree">{profile.degree}</span> × <span data-owner-field="secondDegreeShort">{profile.secondDegreeShort}</span></p>
     <div class="hero-actions"><a class="button" href={url('/research/')}>Explore research <Icon name="arrow" size={16}/></a><a class="button-secondary" href={url('/notes/')}>Open the notebook <Icon name="book" size={16}/></a></div>
-  </div><HeroAnimationLibrary defaultAnimation={heroAnimationConfig.default}/></div>
+  </div><HeroAnimationLibrary defaultAnimation={heroAnimationConfig.default} available={heroAnimationConfig.available}/></div>
   {focusSection && <div class="currently-bar" data-owner-section="current-focus" id="current-focus"><p class="eyebrow">{focusSection.title || 'CURRENTLY'}</p><div class="currently-items" data-owner-field="currently">{profile.currently.map((item: any) => <div class="currently-item"><span>{item.label}</span><strong>{item.text}</strong></div>)}</div></div>}
 </section>}
 {id === 'current-focus' && <section class="currently-bar standalone-focus" data-owner-section={id} id={id}><p class="eyebrow">{section.title || 'CURRENTLY'}</p><div class="currently-items" data-owner-field="currently">{profile.currently.map((item: any) => <div class="currently-item"><span>{item.label}</span><strong>{item.text}</strong></div>)}</div></section>}

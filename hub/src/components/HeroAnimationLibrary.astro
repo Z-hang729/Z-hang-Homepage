@@ -5,18 +5,21 @@ import '../styles/hero-animations.css';
 
 interface Props {
   defaultAnimation?: string;
+  available?: string[];
 }
 
-const { defaultAnimation = DEFAULT_HERO_ANIMATION } = Astro.props;
-const selected = HERO_ANIMATIONS.some((animation) => animation.id === defaultAnimation)
+const { defaultAnimation = DEFAULT_HERO_ANIMATION, available = HERO_ANIMATIONS.map((animation) => animation.id) } = Astro.props;
+const configuredAnimations = HERO_ANIMATIONS.filter((animation) => available.includes(animation.id));
+const animations = configuredAnimations.length ? configuredAnimations : HERO_ANIMATIONS;
+const selected = animations.some((animation) => animation.id === defaultAnimation)
   ? defaultAnimation
-  : DEFAULT_HERO_ANIMATION;
+  : animations[0]?.id || DEFAULT_HERO_ANIMATION;
 ---
 <div
   class="hero-animation-library"
   data-hero-animation
   data-default-animation={selected}
-  data-animation-count={HERO_ANIMATIONS.length}
+  data-animation-count={animations.length}
 >
   <div class="hero-animation-stage" data-hero-animation-stage>
     <Magnetosphere />
@@ -25,7 +28,7 @@ const selected = HERO_ANIMATIONS.some((animation) => animation.id === defaultAni
   <div class="hero-animation-picker" role="group" aria-label="Choose a scientific illustration">
     <p class="hero-animation-picker-label">Explore the illustration</p>
     <div class="hero-animation-options" data-hero-animation-options>
-      {HERO_ANIMATIONS.map((animation) => (
+      {animations.map((animation) => (
         <button
           type="button"
           class="hero-animation-option"
@@ -40,7 +43,7 @@ const selected = HERO_ANIMATIONS.some((animation) => animation.id === defaultAni
       ))}
     </div>
     <p class="hero-animation-status" data-hero-animation-status aria-live="polite">
-      {HERO_ANIMATIONS.find((animation) => animation.id === selected)?.description}
+      {animations.find((animation) => animation.id === selected)?.description}
     </p>
     <p class="hero-animation-note">Illustrations are conceptual and not to scale.</p>
   </div>

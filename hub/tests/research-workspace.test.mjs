@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { researchWorkspace, taskBoard, workspaceCounts, workspaceRelationPath } from '../src/lib/research-workspace.mjs';
+import { validateMetadata } from '../src/lib/owner/policy.mjs';
 
 test('research workspace normalizes task, experiment, dataset and code records', () => {
   const workspace = researchWorkspace({ id: 'tio-image-alignment', data: {
@@ -24,4 +25,11 @@ test('workspace relations use existing site routes and counts remain read-only',
   assert.equal(workspaceRelationPath('file:one', '/Z-hang-Homepage'), '/Z-hang-Homepage/files/one/');
   assert.equal(workspaceRelationPath('note:week-1', '/Z-hang-Homepage'), '/Z-hang-Homepage/notes/week-1/');
   assert.deepEqual(workspaceCounts(workspace), { tasks: 2, experiments: 0, datasets: 1, code: 1, files: 1, figures: 0, references: 0, packages: 0, logs: 0, notes: 1 });
+});
+
+test('owner policy validates research workspace records before publication', () => {
+  const base = { title: 'Study', description: 'A study', date: '2026-01-01', updated: '2026-01-01', status: 'Planning' };
+  assert.throws(() => validateMetadata({ ...base, tasks: [{ title: 'Task', status: 'Doing' }] }, { kind: 'research' }), /task status/);
+  assert.throws(() => validateMetadata({ ...base, experiments: [{ title: 'Test', date: 'not-a-date' }] }, { kind: 'research' }), /experiments\[0\]\.date/);
+  assert.doesNotThrow(() => validateMetadata({ ...base, tasks: [{ title: 'Task', status: 'Todo' }], experiments: [{ title: 'Test', date: '2026-01-02' }], datasets: [{ name: 'Data', files: [] }], code: [{ title: 'Code', repository: 'https://github.com/example/repo' }] }, { kind: 'research' }));
 });
