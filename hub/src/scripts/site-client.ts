@@ -31,6 +31,7 @@ const escapeSearchMeta = (value: unknown) => String(value ?? "").replace(/[&<>\"
 }[char] || char));
 function decorateSearchResult(result: {meta?: Record<string, unknown>; excerpt?: string}) {
   const meta = result?.meta || {};
+  if (result.excerpt?.includes('global-search-meta')) return result;
   const details = [
     meta.type && `Type: ${meta.type}`,
     (meta.updated || meta.date) && `Updated: ${meta.updated || meta.date}`,
