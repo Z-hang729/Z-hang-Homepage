@@ -13,6 +13,8 @@ import { unified } from "@astrojs/markdown-remark";
 import idl from "./scripts/idl-language.mjs";
 import { pagefindDevPlugin } from "./scripts/pagefind-dev.mjs";
 import { ownerLocalPlugin } from "./scripts/owner-local-plugin.mjs";
+import { fileURLToPath } from "node:url";
+const picomatchShim = fileURLToPath(new URL("./scripts/picomatch-shim.mjs", import.meta.url));
 export default defineConfig({
   site: process.env.SITE_URL || "https://example.com",
   base: process.env.SITE_BASE_PATH || "/",
@@ -47,6 +49,8 @@ export default defineConfig({
       ],
     },
   },
-  vite: { plugins: [localAdminPlugin(), pagefindDevPlugin(), ownerLocalPlugin()] },
+  // Astro's content loader imports the CommonJS picomatch package. Keep that
+  // dependency external so Vite's SSR module runner lets Node load it as CJS.
+  vite: { plugins: [localAdminPlugin(), pagefindDevPlugin(), ownerLocalPlugin()], resolve: { alias: { picomatch: picomatchShim } }, ssr: { external: ['picomatch'] } },
   devToolbar: { enabled: false },
 });

@@ -741,13 +741,6 @@ img {
   color: var(--muted);
   margin-top: 24px;
 }
-.global-search-meta {
-  display: inline-block;
-  margin-bottom: 3px;
-  color: var(--accent);
-  font: 10px var(--font-mono);
-  letter-spacing: .03em;
-}
 .toast {
   position: fixed;
   bottom: 25px;

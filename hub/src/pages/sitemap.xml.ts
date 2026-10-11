@@ -9,7 +9,7 @@ import {readAcademicRecords} from '../lib/academic-records.mjs';
 export const GET: APIRoute = async ({ site }) => {
   if (!site) throw new Error('SITE_URL is required to generate the sitemap.');
   const entries = await allEntries();
-  const staticPaths = ['/', '/research/', '/notes/', '/projects/', '/about/', '/cv/', '/publications/', '/search/', '/tags/', '/changelog/','/academic/','/figures/','/references/','/activity/','/packages/'];
+  const staticPaths = ['/', '/research/', '/notes/', '/projects/', '/about/', '/cv/', '/publications/', '/search/', '/tags/', '/changelog/','/academic/','/figures/','/references/','/activity/','/packages/','/knowledge/'];
   const tags = [...new Set(entries.flatMap((entry) => entry.data.tags.map(tagSlug)))].map((tag) => `/tags/${tag}/`);
   const documents = (['research', 'notes', 'projects'] as const).flatMap((kind) => getDocuments(kind).map((document) => `/${kind}/${document.slug}/`));
   const files=getFiles();

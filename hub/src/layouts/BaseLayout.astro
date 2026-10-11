@@ -28,6 +28,7 @@ const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':curre
     <meta property="og:image" content={new URL(url(ogImage), Astro.site).href}/><meta name="twitter:card" content="summary_large_image"/>
     <script type="application/ld+json" set:html={JSON.stringify(structured).replace(/</g, '\u003c')}/>
     {structuredData && <script type="application/ld+json" set:html={JSON.stringify(structuredData).replace(/</g, '\u003c')}/>}
+    <style is:global>.global-search-meta{display:inline-block;margin-bottom:3px;color:var(--accent);font:10px var(--font-mono);letter-spacing:.03em}</style>
     <script is:inline>try{document.documentElement.dataset.theme=localStorage.getItem('zh-theme')||(matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light')}catch{}</script>
   </head>
   <body>
