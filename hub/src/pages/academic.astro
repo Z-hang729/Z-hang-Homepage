@@ -3,5 +3,47 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import '../styles/academic-publishing.css';
 import {url} from '../lib/site';
 const modules=[['Figures','/figures/','Scientific figures linked to their original files and research context.'],['References','/references/','A shared bibliography, citations and source metadata.'],['Activity','/activity/','A timeline derived from published academic work.'],['Academic CV','/cv/','Online CV and a downloadable PDF from the same information.'],['Research Packages','/packages/','Versioned inputs, code, methods and outputs for reproducibility.']];
+const contextLinks=[['Research','/research/','Questions, methods and dated research logs are the starting context.'],['Projects','/projects/','Projects group the work into a durable research thread.'],['Notes','/notes/','Notes can cite the shared bibliography and link back to research.'],['Files','/files/','The File Library stores one original file record reused by figures and packages.']];
 ---
-<BaseLayout title="Academic publishing"><div class="pub-shell"><header class="pub-header"><h1>Academic publishing</h1><p>Research context, scholarly sources and reproducible work.</p></header><div class="pub-grid">{modules.map(([title,href,description])=><article class="pub-card"><h2><a href={url(href)}>{title}</a></h2><p>{description}</p></article>)}</div></div></BaseLayout>
+<BaseLayout title="Academic publishing" description="Research context, scholarly sources and reproducible work.">
+ <div class="pub-shell">
+  <header class="pub-header">
+   <p class="pub-kicker">THE RESEARCH PUBLISHING SYSTEM</p>
+   <h1>Academic publishing</h1>
+   <p>Research context, scholarly sources and reproducible work. Start with a research question or project, then follow the linked evidence and files that explain it.</p>
+   <nav class="pub-nav pub-context-nav" aria-label="Research system entry points">
+    {contextLinks.map(([title,href])=><a href={url(href)}>{title}</a>)}
+   </nav>
+  </header>
+
+  <section class="pub-section pub-architecture" aria-labelledby="publishing-architecture">
+   <div class="pub-section-heading"><p class="pub-kicker">HOW THE PARTS CONNECT</p><h2 id="publishing-architecture">Research → Projects → evidence</h2></div>
+   <p class="pub-section-lede">Research and Projects provide the context. Figures, References and Research Packages document the work, while every attached original remains in the same File Library. Notes can cite the same references and link back to the research that motivated them.</p>
+   <div class="pub-flow" aria-label="Relationship between research, projects, academic records and files">
+    <div class="pub-flow-step"><a class="pub-flow-node" href={url('/research/')}><strong>Research</strong><span>questions, methods and logs</span></a></div>
+    <span class="pub-flow-arrow" aria-hidden="true">↓</span>
+    <div class="pub-flow-step"><a class="pub-flow-node" href={url('/projects/')}><strong>Projects</strong><span>a durable thread for related work</span></a>
+     <div class="pub-flow-branch" aria-label="Project evidence">
+      <a class="pub-flow-node" href={url('/figures/')}><strong>Figures</strong><span>visual results and captions</span></a>
+      <a class="pub-flow-node" href={url('/references/')}><strong>References</strong><span>literature, citations and backlinks</span></a>
+      <a class="pub-flow-node" href={url('/packages/')}><strong>Packages</strong><span>inputs, code, methods and outputs</span></a>
+     </div>
+    </div>
+    <span class="pub-flow-arrow" aria-hidden="true">↓</span>
+    <div class="pub-flow-step"><a class="pub-flow-node" href={url('/files/')}><strong>Files</strong><span>one shared library of originals</span></a></div>
+   </div>
+   <p class="pub-flow-note"><strong>Reuse the same record:</strong> a figure or package selects an existing File ID; it does not upload a second copy. Published relations are shown on the relevant detail pages and remain subject to the existing Owner review and visibility rules.</p>
+  </section>
+
+  <section class="pub-section" aria-labelledby="module-directory">
+   <div class="pub-section-heading"><p class="pub-kicker">PUBLISHED VIEWS</p><h2 id="module-directory">Explore the academic record</h2></div>
+   <div class="pub-grid">{modules.map(([title,href,description])=><article class="pub-card"><h3><a href={url(href)}>{title}</a></h3><p>{description}</p></article>)}</div>
+   <p class="pub-empty" role="note"><strong>Publication boundary:</strong> these views show published records only. If a collection has no published records yet, its existing empty state remains visible; Owner drafts stay in the local workspace until explicitly reviewed and published.</p>
+  </section>
+
+  <section class="pub-section pub-context" aria-labelledby="context-directory">
+   <div class="pub-section-heading"><p class="pub-kicker">SHARED CONTEXT</p><h2 id="context-directory">Where to begin</h2></div>
+   <div class="pub-context-grid">{contextLinks.map(([title,href,description])=><a class="pub-context-card" href={url(href)}><strong>{title}</strong><span>{description}</span></a>)}</div>
+  </section>
+ </div>
+</BaseLayout>
