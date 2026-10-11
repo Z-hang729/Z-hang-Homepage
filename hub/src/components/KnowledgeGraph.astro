@@ -60,7 +60,7 @@ const { endpoint, base, nodeCount, edgeCount } = Astro.props;
     let panStart: Position = { x: 0, y: 0 };
     const labels: Record<string, string> = { research: 'Research', note: 'Notes', project: 'Projects', log: 'Research log', file: 'File', figure: 'Figure', reference: 'Reference', package: 'Research package' };
     const escapeHTML = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, (char: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
-    const pathFor = (path: string | undefined): string => path && !/^(?:https?:|mailto:|#)/i.test(path) ? `${base.replace(/\/$/, '')}/${String(path).replace(/^\//, '')}` : '';
+    const pathFor = (path: string | undefined): string => path && path.startsWith('/') && !/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/i.test(path) ? `${base.replace(/\/$/, '')}/${String(path).replace(/^\//, '')}` : '';
     const setStatus = (message: string): void => { if (status) status.textContent = message; };
     const nodePosition = (_node: KnowledgeNode, index: number, total: number): Position => {
       const columns = Math.max(1, Math.ceil(Math.sqrt(total)));
