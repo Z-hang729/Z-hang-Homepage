@@ -33,6 +33,10 @@ export const homepageSections: HomepageSection[] = (
   Array.isArray(homepageData?.sections) ? homepageData.sections : DEFAULT_HOMEPAGE.sections
 ).filter((section: HomepageSection) => HOMEPAGE_SECTION_IDS.includes(section.id))
   .sort((a: HomepageSection, b: HomepageSection) => a.order - b.order);
+export const heroAnimationConfig = {
+  default: typeof homepageData?.heroAnimation?.default === 'string' ? homepageData.heroAnimation.default : 'solar-wind',
+  available: Array.isArray(homepageData?.heroAnimation?.available) ? homepageData.heroAnimation.available : ['solar-wind'],
+};
 export const siteConfig = {
   site: process.env.SITE_URL || "https://example.com",
   base: import.meta.env.BASE_URL,

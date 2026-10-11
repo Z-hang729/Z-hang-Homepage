@@ -1,0 +1,55 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { researchWorkspace, taskBoard, workspaceCounts, workspaceRelationPath } from '../../../lib/research-workspace.mjs';
+import { url, formatDate } from '../../../lib/site';
+import '../../../styles/research-workspace.css';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('research');
+  return entries.map(entry => ({ params: { project: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const workspace = researchWorkspace(entry);
+const board = taskBoard(workspace.tasks);
+const counts = workspaceCounts(workspace);
+const link = (id: string) => { const path = workspaceRelationPath(id, import.meta.env.BASE_URL); return path ? path : null; };
+const relationGroups = [
+  ['Files', workspace.files], ['Figures', workspace.figures], ['References', workspace.references], ['Packages', workspace.packages], ['Logs', workspace.logs], ['Notes', workspace.notes],
+] .filter(([, values]) => values.length) as [string, string[]][];
+---
+<BaseLayout title={`${workspace.title} · Research Workspace`} description={workspace.description || `Research workspace for ${workspace.title}.`}>
+  <main class="workspace-shell" data-research-workspace data-workspace={JSON.stringify(workspace)}>
+    <nav class="workspace-breadcrumb" aria-label="Breadcrumb"><a href={url('/research/')}>Research</a><span aria-hidden="true">/</span><a href={url(`/research/${entry.id}/`)}>{workspace.title}</a><span aria-hidden="true">/</span><span>Workspace</span></nav>
+    <header class="workspace-header"><div><p class="eyebrow">PERSONAL RESEARCH WORKSPACE</p><h1>{workspace.title}</h1><p class="workspace-lede">{workspace.description}</p><p class="workspace-meta"><span>{workspace.status}</span>{workspace.updated && <><span aria-hidden="true">·</span><time datetime={workspace.updated}>Updated {formatDate(workspace.updated)}</time></>}</p></div><a class="button-secondary" href={url(`/research/${entry.id}/`)}>Research overview →</a></header>
+
+    <section class="workspace-stats" aria-label="Workspace counts">{Object.entries(counts).filter(([, value]) => value || ['tasks','experiments','datasets','code'].includes(String(value))).map(([label, value]) => <div class="workspace-stat"><strong>{value}</strong><span>{label}</span></div>)}</section>
+
+    {(workspace.researchQuestion || workspace.hypothesis || Object.keys(workspace.parameters).length > 0) && <section class="workspace-overview workspace-card"><p class="eyebrow">OVERVIEW</p><div class="workspace-overview-grid">{workspace.researchQuestion && <div><h2>Research question</h2><p>{workspace.researchQuestion}</p></div>}{workspace.hypothesis && <div><h2>Hypothesis</h2><p>{workspace.hypothesis}</p></div>}{Object.keys(workspace.parameters).length > 0 && <div><h2>Parameters</h2><dl>{Object.entries(workspace.parameters).map(([key, value]) => <><dt>{key}</dt><dd>{typeof value === 'object' ? JSON.stringify(value) : String(value)}</dd></>)}</dl></div>}</div></section>}
+
+    <section class="workspace-card" aria-labelledby="task-board-title"><div class="workspace-section-heading"><div><p class="eyebrow">RESEARCH TASKS</p><h2 id="task-board-title">Task board</h2></div><p class="workspace-help">Drag a task between columns to explore progress. Save changes in Owner when task editing is enabled.</p></div><div class="task-board" data-task-board>{(['Todo', 'In Progress', 'Completed', 'Archived'] as const).map(status => <section class="task-column" data-task-column={status}><h3>{status}<span>{board[status].length}</span></h3><div class="task-list" data-task-list={status}>{board[status].map(task => <article class="task-card" draggable="true" data-task-id={task.id}><div class="task-card-heading"><strong>{task.title}</strong><span class={`task-priority priority-${task.priority.toLowerCase()}`}>{task.priority}</span></div>{task.description && <p>{task.description}</p>}{task.dueDate && <time datetime={task.dueDate}>Due {formatDate(task.dueDate)}</time>}</article>)}</div></section>)}</div>{!workspace.tasks.length && <p class="workspace-empty">No research tasks recorded yet. Add tasks to the Research entry frontmatter through Owner.</p>}<p class="workspace-status" data-task-status role="status" aria-live="polite"></p></section>
+
+    <div class="workspace-grid">
+      <section class="workspace-card" aria-labelledby="experiments-title"><p class="eyebrow">EXPERIMENT TRACKING</p><h2 id="experiments-title">Experiments</h2>{workspace.experiments.length ? <div class="workspace-record-list">{workspace.experiments.map(experiment => <article class="workspace-record"><div><h3>{experiment.title}</h3><p class="workspace-meta">{experiment.date && <time datetime={experiment.date}>{formatDate(experiment.date)}</time>} · {experiment.status}</p></div><dl><dt>Inputs</dt><dd>{experiment.inputFiles.length} files</dd><dt>Outputs</dt><dd>{experiment.outputs.length} files · {experiment.figures.length} figures</dd></dl>{experiment.notes && <p>{experiment.notes}</p>}</article>)}</div> : <p class="workspace-empty">Experiments will appear here with their input files, method, parameters, environment and outputs.</p>}</section>
+      <section class="workspace-card" aria-labelledby="datasets-title"><p class="eyebrow">DATASET CATALOG</p><h2 id="datasets-title">Datasets</h2>{workspace.datasets.length ? <div class="workspace-record-list">{workspace.datasets.map(dataset => <article class="workspace-record"><h3>{dataset.name}</h3><p class="workspace-meta">{dataset.type}{dataset.instrument && ` · ${dataset.instrument}`}</p><dl>{dataset.observationTime && <><dt>Observation</dt><dd>{dataset.observationTime}</dd></>}{dataset.wavelength && <><dt>Wavelength</dt><dd>{dataset.wavelength}</dd></>}{dataset.resolution && <><dt>Resolution</dt><dd>{dataset.resolution}</dd></>}{dataset.files.length > 0 && <><dt>Files</dt><dd>{dataset.files.length}</dd></>}</dl></article>)}</div> : <p class="workspace-empty">No dataset records yet. Datasets reference existing File Library records; they do not duplicate uploads.</p>}</section>
+    </div>
+
+    <section class="workspace-card" aria-labelledby="code-title"><p class="eyebrow">SCIENTIFIC CODE ARCHIVE</p><h2 id="code-title">Code</h2>{workspace.code.length ? <div class="workspace-code-list">{workspace.code.map(code => <article class="workspace-record"><h3>{code.title}</h3><p class="workspace-meta">{code.language}{code.lastUpdate && ` · Updated ${code.lastUpdate}`}</p><div class="workspace-actions">{code.repository && <a href={code.repository} rel="noreferrer">Repository ↗</a>}{code.readme && <a href={code.readme} rel="noreferrer">README ↗</a>}{code.commit && <code>{code.commit}</code>}</div></article>)}</div> : <p class="workspace-empty">No code records yet. Add links to the source repository instead of copying code into the site.</p>}</section>
+
+    {relationGroups.length > 0 && <section class="workspace-card" aria-labelledby="relations-title"><p class="eyebrow">KNOWLEDGE CONNECTIONS</p><h2 id="relations-title">Related research objects</h2><div class="workspace-relations">{relationGroups.map(([label, ids]) => <div><h3>{label}</h3><ul>{ids.map(id => { const path = link(id); return <li>{path ? <a href={path}>{id}</a> : <span>{id}</span>}</li>; })}</ul></div>)}</div></section>}
+  </main>
+</BaseLayout>
+<script>
+  const root = document.querySelector<HTMLElement>('[data-research-workspace]');
+  const status = root?.querySelector<HTMLElement>('[data-task-status]');
+  let dragged: HTMLElement | null = null;
+  root?.querySelectorAll<HTMLElement>('[data-task-card], .task-card').forEach(card => {
+    card.addEventListener('dragstart', () => { dragged = card; card.classList.add('is-dragging'); });
+    card.addEventListener('dragend', () => { dragged?.classList.remove('is-dragging'); dragged = null; });
+  });
+  root?.querySelectorAll('[data-task-list]').forEach(list => {
+    list.addEventListener('dragover', event => { event.preventDefault(); list.classList.add('is-drop-target'); });
+    list.addEventListener('dragleave', () => list.classList.remove('is-drop-target'));
+    list.addEventListener('drop', event => { event.preventDefault(); list.classList.remove('is-drop-target'); if (!dragged) return; list.append(dragged); const column = list.closest('[data-task-column]')?.getAttribute('data-task-column'); if (status && column) status.textContent = `${dragged.querySelector('strong')?.textContent || 'Task'} moved to ${column}. Save this status in Owner when editing is available.`; });
+  });
+</script>

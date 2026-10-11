@@ -8,3 +8,16 @@ sections:
   - { id: timeline, order: 6, visible: true }
   - { id: projects, order: 7, visible: true }
   - { id: contact, order: 8, visible: true }
+heroAnimation:
+  default: solar-wind
+  available:
+    - solar-wind
+    - solar-corona
+    - solar-flare
+    - cme
+    - magnetic-reconnection
+    - radiation-belt
+    - polarization
+    - plasma-waves
+    - observation-pipeline
+    - research-workflow

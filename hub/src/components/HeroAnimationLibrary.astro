@@ -1,0 +1,51 @@
+---
+import Magnetosphere from './Magnetosphere.astro';
+import { DEFAULT_HERO_ANIMATION, HERO_ANIMATIONS } from '../lib/hero-animation-library.mjs';
+import '../styles/hero-animations.css';
+
+interface Props {
+  defaultAnimation?: string;
+}
+
+const { defaultAnimation = DEFAULT_HERO_ANIMATION } = Astro.props;
+const selected = HERO_ANIMATIONS.some((animation) => animation.id === defaultAnimation)
+  ? defaultAnimation
+  : DEFAULT_HERO_ANIMATION;
+---
+<div
+  class="hero-animation-library"
+  data-hero-animation
+  data-default-animation={selected}
+  data-animation-count={HERO_ANIMATIONS.length}
+>
+  <div class="hero-animation-stage" data-hero-animation-stage>
+    <Magnetosphere />
+    <div class="hero-animation-dynamic" data-hero-animation-dynamic hidden aria-hidden="true"></div>
+  </div>
+  <div class="hero-animation-picker" role="group" aria-label="Choose a scientific illustration">
+    <p class="hero-animation-picker-label">Explore the illustration</p>
+    <div class="hero-animation-options" data-hero-animation-options>
+      {HERO_ANIMATIONS.map((animation) => (
+        <button
+          type="button"
+          class="hero-animation-option"
+          data-animation-id={animation.id}
+          aria-pressed={animation.id === selected ? 'true' : 'false'}
+          aria-label={`${animation.label}: ${animation.description}`}
+          title={animation.description}
+        >
+          <span class="hero-animation-dot" aria-hidden="true"></span>
+          <span>{animation.shortLabel}</span>
+        </button>
+      ))}
+    </div>
+    <p class="hero-animation-status" data-hero-animation-status aria-live="polite">
+      {HERO_ANIMATIONS.find((animation) => animation.id === selected)?.description}
+    </p>
+    <p class="hero-animation-note">Illustrations are conceptual and not to scale.</p>
+  </div>
+</div>
+<script>
+  import '../scripts/hero-animation-client.js';
+</script>
+

@@ -42,6 +42,28 @@ const orderedDates = (value: { date: Date; updated: Date }, ctx: RefinementCtx) 
 const research = defineCollection({ loader: collectionLoader('research'), schema: z.object({ ...common,
   status: z.enum(['Planning', 'In Progress', 'Completed', 'Paused']),
   collaborators: z.array(z.string()).default([]),
+  researchQuestion: z.string().default(''),
+  hypothesis: z.string().default(''),
+  parameters: z.record(z.string(), z.unknown()).default({}),
+  tasks: z.array(z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().min(1), description: z.string().default(''),
+    status: z.enum(['Todo', 'In Progress', 'Completed', 'Archived']).default('Todo'),
+    priority: z.enum(['Low', 'Medium', 'High']).default('Medium'), created: date.optional(), updated: date.optional(), dueDate: date.optional(),
+    relatedFiles: z.array(z.string()).default([]), relatedLogs: z.array(z.string()).default([]),
+  })).default([]),
+  experiments: z.array(z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().min(1), date, status: z.string().default('Planned'),
+    inputFiles: z.array(z.string()).default([]), code: z.array(z.string()).default([]), parameters: z.record(z.string(), z.unknown()).default({}),
+    environment: z.record(z.string(), z.unknown()).default({}), outputs: z.array(z.string()).default([]), figures: z.array(z.string()).default([]), notes: z.string().default(''),
+  })).default([]),
+  datasets: z.array(z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), name: z.string().min(1), type: z.string().default('Observation'), instrument: z.string().default(''),
+    observationTime: z.string().default(''), wavelength: z.string().default(''), resolution: z.string().default(''), cadence: z.string().default(''), source: z.string().default(''), license: z.string().default(''),
+    files: z.array(z.string()).default([]), relatedResearch: z.array(z.string()).default([]),
+  })).default([]),
+  code: z.array(z.object({
+    id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().min(1), language: z.string().default(''), repository: safeURL.optional(), readme: safeURL.optional(), lastUpdate: z.string().default(''), commit: z.string().default(''), releases: z.array(z.string()).default([]),
+  })).default([]),
 }).superRefine(orderedDates) });
 const notes = defineCollection({ loader: collectionLoader('notes'), schema: z.object({ ...common,
   category: z.enum(['Space Physics', 'Physics', 'Mathematics', 'Computer Science', 'General Education', 'Others']),

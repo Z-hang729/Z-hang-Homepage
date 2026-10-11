@@ -63,13 +63,19 @@ function entries(model, kind) { return list(model?.entries?.[kind]); }
  */
 export function dashboardCounts(model, snapshot) {
   const projects = entries(model, 'projects');
+  const research = entries(model, 'research');
   const activeProjects = projects.filter(entry => {
     const status = normalized(entry?.metadata?.status || entry?.metadata?.publicationStatus);
     return !['completed', 'complete', 'archived', 'paused', 'cancelled', 'canceled'].includes(status);
   });
   const files = fileRecordsFromSnapshot(snapshot);
-  return {
-    research: entries(model, 'research').length,
+  const workspace = research.reduce((totals, entry) => {
+    const metadata = entry?.metadata || {};
+    for (const key of ['tasks', 'experiments', 'datasets', 'code']) totals[key] += list(metadata[key]).length;
+    return totals;
+  }, { tasks: 0, experiments: 0, datasets: 0, code: 0 });
+  const result = {
+    research: research.length,
     activeProjects: activeProjects.length,
     projects: projects.length,
     logs: list(model?.logs).length,
@@ -81,6 +87,10 @@ export function dashboardCounts(model, snapshot) {
     references: recordsFromSnapshot(snapshot, 'references').length,
     packages: recordsFromSnapshot(snapshot, 'packages').length,
   };
+  // Keep the original dashboard shape stable for integrations while exposing
+  // workspace metrics as direct read-only properties to the new UI.
+  for (const key of ['tasks', 'experiments', 'datasets', 'code']) Object.defineProperty(result, key, { value: workspace[key], enumerable: false, writable: false });
+  return result;
 }
 
 function relationFiles(files, slug) {

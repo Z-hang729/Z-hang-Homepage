@@ -6,6 +6,7 @@ import {openResearchLog} from './research-log-editor.js';
 
 const categories=['Space Physics','Physics','Mathematics','Computer Science','General Education','Others'];
 const statuses=['Planning','In Progress','Completed','Paused'];
+const heroAnimations=[{value:'solar-wind',label:'Solar wind'},{value:'solar-corona',label:'Solar corona'},{value:'solar-flare',label:'Solar flare'},{value:'cme',label:'Coronal mass ejection'},{value:'magnetic-reconnection',label:'Magnetic reconnection'},{value:'radiation-belt',label:'Earth radiation belt'},{value:'polarization',label:'Polarization and Stokes'},{value:'plasma-waves',label:'Plasma waves'},{value:'observation-pipeline',label:'Solar observation pipeline'},{value:'research-workflow',label:'Research workflow'}];
 const today=()=>new Date().toISOString().slice(0,10);
 function check(label,value=false){const input=el('input',{type:'checkbox',checked:value});return {input,node:el('label',{class:'owner-check'},input,label)};}
 function fields(surface,definitions,source){const result={};const grid=el('div',{class:'owner-form-grid'});for(const [key,label,options={}] of definitions){const field=inputField(label,source[key]??'',options);result[key]=field.input;grid.append(field.node);}surface.body.append(grid);return result;}
@@ -45,6 +46,43 @@ export function openEntry(ctx,kind,slug=null,{section=null,seed={}}={}) {
   if(slug)surface.actions.prepend(button('Preview draft',()=>openPreview(ctx,original.title,editor.value())));
   return surface;
 }
+
+/** Edit the structured Research Workspace fields without introducing a second
+ * content store. JSON is used here so the Owner can preserve arbitrary
+ * scientific parameters and file IDs while the public workspace renders a
+ * stable, typed view. */
+export function openWorkspace(ctx, slug) {
+  const entry = ctx.model().entries.research.find(item => item.slug === slug);
+  if (!entry) { ctx.notice('This research entry is no longer in the draft.'); return; }
+  const source = entry.metadata || {};
+  const surface = modal('Research Workspace · ' + source.title, 'Tasks, experiments, datasets and code remain metadata on this Research entry. Files are selected by their existing File Library IDs.');
+  const question = inputField('Research question', source.researchQuestion || '', { multiline: true, rows: 3 });
+  const hypothesis = inputField('Hypothesis', source.hypothesis || '', { multiline: true, rows: 3 });
+  surface.body.append(question.node, hypothesis.node);
+  const jsonField = (label, key, fallback) => {
+    const value = source[key] === undefined ? fallback : source[key];
+    const field = inputField(label + ' (JSON)', JSON.stringify(value, null, 2), { multiline: true, rows: 8 });
+    surface.body.append(field.node);
+    return field.input;
+  };
+  const parameters = jsonField('Parameters', 'parameters', {});
+  const tasks = jsonField('Tasks', 'tasks', []);
+  const experiments = jsonField('Experiments', 'experiments', []);
+  const datasets = jsonField('Datasets', 'datasets', []);
+  const code = jsonField('Scientific code links', 'code', []);
+  const parse = (input, key, expected) => {
+    let value;
+    try { value = JSON.parse(input.value || (expected === 'object' ? '{}' : '[]')); } catch { throw new Error(`${key} must contain valid JSON.`); }
+    if ((expected === 'array' && !Array.isArray(value)) || (expected === 'object' && (!value || typeof value !== 'object' || Array.isArray(value)))) throw new Error(`${key} must be a JSON ${expected}.`);
+    return value;
+  };
+  formAction(surface, 'Save workspace to draft', async () => {
+    const metadata = { ...source, researchQuestion: question.input.value.trim(), hypothesis: hypothesis.input.value.trim(), parameters: parse(parameters, 'Parameters', 'object'), tasks: parse(tasks, 'Tasks', 'array'), experiments: parse(experiments, 'Experiments', 'array'), datasets: parse(datasets, 'Datasets', 'array'), code: parse(code, 'Scientific code links', 'array'), updated: today() };
+    await ctx.stage(updateEntryChanges(ctx.snapshot(), { kind: 'research', slug, metadata }));
+    surface.close();
+  });
+  return surface;
+}
 export function openSections(ctx,entry,onSave) {
   const surface=modal('Arrange sections','Move, add, or remove sections. Nothing is published until you review your draft.');
   const preamble=markdownEditor(entry.preamble||'',ctx.base);surface.body.append(el('h3',{},'Introduction'),preamble.node);
@@ -74,7 +112,8 @@ export function openNavigation(ctx) {
 }
 export function openHomepage(ctx) {
   const surface=modal('Homepage sections','Reorder sections or hide them from the public homepage.');const list=el('div',{class:'owner-section-order'}),records=new Map();surface.body.append(list);
+  const heroAnimation=selectField('Default scientific illustration',ctx.model().homepage.heroAnimation?.default||'solar-wind',heroAnimations);surface.body.append(el('p',{class:'owner-muted'},'Visitors can switch illustrations manually. The Homepage never advances them automatically.'),heroAnimation.node);
   [...ctx.model().homepage.sections].sort((a,b)=>a.order-b.order).forEach(section=>{const row=el('div',{class:'owner-order-row'}),visible=check('Visible',section.visible!==false),title=inputField('Heading (optional)',section.title||'');records.set(row,{section,visible,title});row.append(el('strong',{},section.id.replaceAll('-',' ')),visible.node,title.node,button('Up',()=>{const prev=row.previousElementSibling;if(prev)list.insertBefore(row,prev);}),button('Down',()=>{const next=row.nextElementSibling;if(next)list.insertBefore(next,row);}));list.append(row);});
-  formAction(surface,'Save layout to draft',async()=>{const sections=[...list.children].map((row,order)=>{const {section,visible,title}=records.get(row);return {...section,order,visible:visible.input.checked,...(title.input.value.trim()?{title:title.input.value.trim()}:{title:undefined})};});await ctx.stage(updateDataChanges(ctx.snapshot(),{homepage:{...ctx.model().homepage,sections}}));surface.close();});
+  formAction(surface,'Save layout to draft',async()=>{const sections=[...list.children].map((row,order)=>{const {section,visible,title}=records.get(row);return {...section,order,visible:visible.input.checked,...(title.input.value.trim()?{title:title.input.value.trim()}:{title:undefined})};});const homepage={...ctx.model().homepage,sections,heroAnimation:{...(ctx.model().homepage.heroAnimation||{}),default:heroAnimation.input.value,available:(ctx.model().homepage.heroAnimation?.available||heroAnimations.map(({value})=>value))}};await ctx.stage(updateDataChanges(ctx.snapshot(),{homepage}));surface.close();});
 }
 export async function openPreview(ctx,title,body){const surface=modal('Draft preview: '+title,'This preview stays on your device.');const preview=el('article',{class:'prose owner-preview'});surface.body.append(preview);try{await renderPreview(body,preview,ctx.base);}catch(error){surface.status.textContent=error.message;}return surface;}
