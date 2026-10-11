@@ -64,7 +64,6 @@ const { endpoint, base, nodeCount, edgeCount } = Astro.props;
     const setStatus = (message: string): void => { if (status) status.textContent = message; };
     const nodePosition = (_node: KnowledgeNode, index: number, total: number): Position => {
       const columns = Math.max(1, Math.ceil(Math.sqrt(total)));
-      const rows = Math.max(1, Math.ceil(total / columns));
       const col = index % columns, row = Math.floor(index / columns);
       return { x: 120 + col * 190, y: 90 + row * 128 };
     };
