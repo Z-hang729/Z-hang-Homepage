@@ -1,0 +1,28 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import KnowledgeGraph from '../components/KnowledgeGraph.astro';
+import { readKnowledgeGraph } from '../../scripts/knowledge-source.mjs';
+import { url } from '../lib/site';
+import '../styles/knowledge.css';
+
+// Keep the public graph out of the initial HTML.  The count is useful context,
+// while the actual nodes are fetched only after the visitor asks to open the map.
+const graph = readKnowledgeGraph(process.cwd(), { publicOnly: true });
+---
+
+<BaseLayout title="Knowledge map" description="A navigable map of published research, notes, files, and scholarly connections.">
+  <div class="container knowledge-page">
+    <header class="page-intro knowledge-header">
+      <p class="eyebrow">THE KNOWLEDGE MAP</p>
+      <h1>How the work connects.</h1>
+      <p class="intro-description">Explore published relationships between research, notes, projects, files, figures, references, and research packages. Draft and private material is never included.</p>
+      <nav class="knowledge-nav" aria-label="Knowledge map navigation">
+        <a href={url('/research/')}>Research</a>
+        <a href={url('/notes/')}>Notes</a>
+        <a href={url('/files/')}>Files</a>
+        <a href={url('/academic/')}>Academic publishing</a>
+      </nav>
+    </header>
+    <KnowledgeGraph endpoint={url('/knowledge.json')} base={import.meta.env.BASE_URL} nodeCount={graph.nodes.length} edgeCount={graph.edges.length} />
+  </div>
+</BaseLayout>

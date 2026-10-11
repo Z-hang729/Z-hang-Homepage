@@ -1,0 +1,137 @@
+---
+interface Props { endpoint: string; base: string; nodeCount: number; edgeCount: number; }
+const { endpoint, base, nodeCount, edgeCount } = Astro.props;
+---
+
+<section class="knowledge-map" data-knowledge-map data-endpoint={endpoint} data-base={base} aria-labelledby="knowledge-map-title">
+  <div class="knowledge-map-heading">
+    <div>
+      <h2 id="knowledge-map-title">Published connections</h2>
+      <p class="knowledge-map-summary" data-knowledge-summary>{nodeCount} nodes · {edgeCount} connections available</p>
+    </div>
+    <div class="knowledge-map-actions">
+      <button class="button" type="button" data-knowledge-load>Open map</button>
+      <button class="button-secondary" type="button" data-knowledge-reset hidden>Reset view</button>
+    </div>
+  </div>
+  <p class="knowledge-map-status" data-knowledge-status role="status" aria-live="polite">The map loads on request so ordinary page visits stay light.</p>
+  <div class="knowledge-map-toolbar" data-knowledge-controls hidden>
+    <label>Find a node<input type="search" data-knowledge-query placeholder="Title or ID" autocomplete="off" /></label>
+    <label>Type<select data-knowledge-type><option value="">All types</option><option value="research">Research</option><option value="note">Notes</option><option value="project">Projects</option><option value="log">Research logs</option><option value="file">Files</option><option value="figure">Figures</option><option value="reference">References</option><option value="package">Research packages</option></select></label>
+    <label class="knowledge-toggle"><input type="checkbox" data-knowledge-list /> List view</label>
+    <button type="button" class="button-secondary" data-knowledge-clear>Clear filters</button>
+  </div>
+  <div class="knowledge-map-stage" data-knowledge-stage hidden>
+    <div class="knowledge-map-graph" data-knowledge-graph role="img" aria-label="Interactive knowledge graph"></div>
+    <div class="knowledge-map-list" data-knowledge-list-view hidden aria-label="Knowledge map list"></div>
+    <aside class="knowledge-map-details" data-knowledge-details hidden aria-live="polite"></aside>
+  </div>
+</section>
+
+<script>
+  type KnowledgeNode = { id: string; type: string; title: string; path?: string; description?: string; tags?: string[]; };
+  type KnowledgeEdge = { source: string; target: string; type?: string; };
+  type KnowledgeGraphData = { nodes: KnowledgeNode[]; edges: KnowledgeEdge[]; };
+  type Position = { x: number; y: number; };
+  const root = document.querySelector<HTMLElement>('[data-knowledge-map]');
+  if (root) {
+    const endpoint = root.dataset.endpoint || '';
+    const base = root.dataset.base || '/';
+    const loadButton = root.querySelector<HTMLButtonElement>('[data-knowledge-load]');
+    const resetButton = root.querySelector<HTMLButtonElement>('[data-knowledge-reset]');
+    const controls = root.querySelector<HTMLElement>('[data-knowledge-controls]');
+    const stage = root.querySelector<HTMLElement>('[data-knowledge-stage]');
+    const graphHost = root.querySelector<HTMLElement>('[data-knowledge-graph]');
+    const listHost = root.querySelector<HTMLElement>('[data-knowledge-list-view]');
+    const details = root.querySelector<HTMLElement>('[data-knowledge-details]');
+    const status = root.querySelector<HTMLElement>('[data-knowledge-status]');
+    const summary = root.querySelector<HTMLElement>('[data-knowledge-summary]');
+    const query = root.querySelector<HTMLInputElement>('[data-knowledge-query]');
+    const type = root.querySelector<HTMLSelectElement>('[data-knowledge-type]');
+    const listToggle = root.querySelector<HTMLInputElement>('[data-knowledge-list]');
+    const clearButton = root.querySelector<HTMLButtonElement>('[data-knowledge-clear]');
+    let graph: KnowledgeGraphData | null = null;
+    let filtered: KnowledgeNode[] = [];
+    let selected: KnowledgeNode | null = null;
+    let zoom = 1;
+    let pan: Position = { x: 0, y: 0 };
+    let dragging = false;
+    let dragStart: Position = { x: 0, y: 0 };
+    let panStart: Position = { x: 0, y: 0 };
+    const labels: Record<string, string> = { research: 'Research', note: 'Notes', project: 'Projects', log: 'Research log', file: 'File', figure: 'Figure', reference: 'Reference', package: 'Research package' };
+    const escapeHTML = (value: unknown): string => String(value ?? '').replace(/[&<>"']/g, (char: string) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char] || char);
+    const pathFor = (path: string | undefined): string => path && !/^(?:https?:|mailto:|#)/i.test(path) ? `${base.replace(/\/$/, '')}/${String(path).replace(/^\//, '')}` : '';
+    const setStatus = (message: string): void => { if (status) status.textContent = message; };
+    const nodePosition = (_node: KnowledgeNode, index: number, total: number): Position => {
+      const columns = Math.max(1, Math.ceil(Math.sqrt(total)));
+      const rows = Math.max(1, Math.ceil(total / columns));
+      const col = index % columns, row = Math.floor(index / columns);
+      return { x: 120 + col * 190, y: 90 + row * 128 };
+    };
+    function visibleNodes(): KnowledgeNode[] {
+      if (!graph) return [];
+      const needle = String(query?.value || '').trim().toLocaleLowerCase();
+      const kind = String(type?.value || '');
+      return graph.nodes.filter(node => (!kind || node.type === kind) && (!needle || `${node.title} ${node.id} ${node.description || ''} ${(node.tags || []).join(' ')}`.toLocaleLowerCase().includes(needle)));
+    }
+    function showDetails(node: KnowledgeNode): void {
+      selected = node;
+      if (!details) return;
+      const href = pathFor(node.path);
+      details.hidden = false;
+      details.innerHTML = `<button type="button" class="knowledge-details-close" data-knowledge-close aria-label="Close details">×</button><span class="knowledge-node-type">${escapeHTML(labels[node.type] || node.type)}</span><h3>${escapeHTML(node.title)}</h3><p>${escapeHTML(node.description || 'No public description.')}</p>${node.tags?.length ? `<p class="knowledge-node-tags">${node.tags.map(escapeHTML).join(' · ')}</p>` : ''}${href ? `<a class="text-link" href="${escapeHTML(href)}">Open source →</a>` : ''}`;
+      details.querySelector('[data-knowledge-close]')?.addEventListener('click', () => { details.hidden = true; selected = null; });
+    }
+    function renderList(): void {
+      if (!listHost) return;
+      listHost.replaceChildren();
+      if (!filtered.length) { listHost.innerHTML = '<p class="knowledge-empty">No published nodes match these filters.</p>'; return; }
+      const fragment = document.createDocumentFragment();
+      filtered.forEach((node: KnowledgeNode) => {
+        const item = document.createElement('article'); item.className = 'knowledge-list-item';
+        const heading = document.createElement(node.path ? 'a' : 'h3'); if (node.path) (heading as HTMLAnchorElement).href = pathFor(node.path); heading.textContent = node.title;
+        item.append(heading);
+        const meta = document.createElement('p'); meta.className = 'knowledge-list-meta'; meta.textContent = `${labels[node.type] || node.type} · ${node.id}`; item.append(meta);
+        if (node.description) { const text = document.createElement('p'); text.textContent = node.description; item.append(text); }
+        fragment.append(item);
+      });
+      listHost.append(fragment);
+    }
+    function renderGraph(): void {
+      if (!graphHost || !graph) return;
+      filtered = visibleNodes();
+      const selectedIds = new Set(filtered.map(node => node.id));
+      const positions = new Map<string, Position>(filtered.map((node: KnowledgeNode, index: number) => [node.id, nodePosition(node, index, filtered.length)]));
+      const width = Math.max(680, Math.min(1200, Math.ceil(Math.sqrt(Math.max(filtered.length, 1))) * 210));
+      const height = Math.max(360, Math.ceil(filtered.length / Math.max(1, Math.ceil(Math.sqrt(Math.max(filtered.length, 1))))) * 148);
+      const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); svg.setAttribute('viewBox', `0 0 ${width} ${height}`); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Published knowledge graph');
+      const viewport = document.createElementNS('http://www.w3.org/2000/svg', 'g'); viewport.setAttribute('data-knowledge-viewport', ''); viewport.setAttribute('transform', `translate(${pan.x} ${pan.y}) scale(${zoom})`); svg.append(viewport);
+      const edgeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g'); edgeGroup.classList.add('knowledge-edges');
+      graph.edges.filter((edge: KnowledgeEdge) => selectedIds.has(edge.source) && selectedIds.has(edge.target)).forEach((edge: KnowledgeEdge) => { const source = positions.get(edge.source), target = positions.get(edge.target); if (!source || !target) return; const line = document.createElementNS('http://www.w3.org/2000/svg', 'line'); line.setAttribute('x1', String(source.x)); line.setAttribute('y1', String(source.y)); line.setAttribute('x2', String(target.x)); line.setAttribute('y2', String(target.y)); line.setAttribute('data-relation', edge.type || 'related'); edgeGroup.append(line); });
+      viewport.append(edgeGroup);
+      const nodeGroup = document.createElementNS('http://www.w3.org/2000/svg', 'g'); nodeGroup.classList.add('knowledge-nodes');
+      filtered.forEach((node: KnowledgeNode) => { const position = positions.get(node.id); if (!position) return; const group = document.createElementNS('http://www.w3.org/2000/svg', 'g'); group.classList.add('knowledge-node'); group.setAttribute('tabindex', '0'); group.setAttribute('role', 'button'); group.setAttribute('aria-label', `${labels[node.type] || node.type}: ${node.title}`); group.setAttribute('transform', `translate(${position.x} ${position.y})`); const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle'); circle.setAttribute('r', selected?.id === node.id ? '16' : '12'); circle.dataset.type = node.type; const text = document.createElementNS('http://www.w3.org/2000/svg', 'text'); text.textContent = node.title.length > 24 ? `${node.title.slice(0, 22)}…` : node.title; text.setAttribute('y', '34'); text.setAttribute('text-anchor', 'middle'); group.append(circle, text); group.addEventListener('click', () => showDetails(node)); group.addEventListener('keydown', (event: KeyboardEvent) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); showDetails(node); } }); nodeGroup.append(group); });
+      viewport.append(nodeGroup); graphHost.replaceChildren(svg); renderList();
+      if (summary) summary.textContent = `${filtered.length} of ${graph.nodes.length} nodes · ${graph.edges.filter(edge => selectedIds.has(edge.source) && selectedIds.has(edge.target)).length} connections`;
+    }
+    function resetView(): void { zoom = 1; pan = { x: 0, y: 0 }; if (query) query.value = ''; if (type) type.value = ''; renderGraph(); }
+    async function loadGraph(): Promise<void> {
+      if (graph) { renderGraph(); return; }
+      if (loadButton) loadButton.disabled = true;
+      setStatus('Loading the published graph…');
+      try {
+        const response = await fetch(endpoint, { headers: { accept: 'application/json' }, credentials: 'omit' });
+        if (!response.ok) throw new Error(`Knowledge map request failed (${response.status}).`);
+        const value = await response.json();
+        if (!value || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) throw new Error('The published graph has an invalid shape.');
+        graph = value as KnowledgeGraphData; if (controls) controls.hidden = false; if (stage) stage.hidden = false; if (resetButton) resetButton.hidden = false; if (loadButton) loadButton.hidden = true; setStatus('Published nodes only. Use the filter or open a node for its source.'); renderGraph();
+      } catch (error: unknown) { setStatus(error instanceof Error ? error.message : 'The knowledge map could not be loaded.'); if (loadButton) loadButton.disabled = false; }
+    }
+    loadButton?.addEventListener('click', loadGraph); resetButton?.addEventListener('click', resetView); query?.addEventListener('input', renderGraph); type?.addEventListener('change', renderGraph); clearButton?.addEventListener('click', resetView);
+    listToggle?.addEventListener('change', () => { const list = listToggle.checked; graphHost?.toggleAttribute('hidden', list); listHost?.toggleAttribute('hidden', !list); if (list) renderList(); });
+    graphHost?.addEventListener('wheel', (event: WheelEvent) => { if (!graph) return; event.preventDefault(); zoom = Math.max(.45, Math.min(2.8, zoom * (event.deltaY > 0 ? .9 : 1.1))); renderGraph(); }, { passive: false });
+    graphHost?.addEventListener('pointerdown', (event: PointerEvent) => { dragging = true; dragStart = { x: event.clientX, y: event.clientY }; panStart = { ...pan }; graphHost.setPointerCapture?.(event.pointerId); });
+    graphHost?.addEventListener('pointermove', (event: PointerEvent) => { if (!dragging) return; pan = { x: panStart.x + (event.clientX - dragStart.x), y: panStart.y + (event.clientY - dragStart.y) }; renderGraph(); });
+    graphHost?.addEventListener('pointerup', () => { dragging = false; }); graphHost?.addEventListener('pointercancel', () => { dragging = false; });
+  }
+</script>
