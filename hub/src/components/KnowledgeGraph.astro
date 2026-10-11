@@ -128,7 +128,7 @@ const { endpoint, base, nodeCount, edgeCount } = Astro.props;
       } catch (error: unknown) { setStatus(error instanceof Error ? error.message : 'The knowledge map could not be loaded.'); if (loadButton) loadButton.disabled = false; }
     }
     loadButton?.addEventListener('click', loadGraph); resetButton?.addEventListener('click', resetView); query?.addEventListener('input', renderGraph); type?.addEventListener('change', renderGraph); clearButton?.addEventListener('click', resetView);
-    listToggle?.addEventListener('change', () => { const list = listToggle.checked; graphHost?.toggleAttribute('hidden', list); listHost?.toggleAttribute('hidden', !list); if (list) renderList(); });
+    listToggle?.addEventListener('change', (event: Event) => { const list = (event.currentTarget as HTMLInputElement).checked; graphHost?.toggleAttribute('hidden', list); listHost?.toggleAttribute('hidden', !list); if (list) renderList(); });
     graphHost?.addEventListener('wheel', (event: WheelEvent) => { if (!graph) return; event.preventDefault(); zoom = Math.max(.45, Math.min(2.8, zoom * (event.deltaY > 0 ? .9 : 1.1))); renderGraph(); }, { passive: false });
     graphHost?.addEventListener('pointerdown', (event: PointerEvent) => { dragging = true; dragStart = { x: event.clientX, y: event.clientY }; panStart = { ...pan }; graphHost.setPointerCapture?.(event.pointerId); });
     graphHost?.addEventListener('pointermove', (event: PointerEvent) => { if (!dragging) return; pan = { x: panStart.x + (event.clientX - dragStart.x), y: panStart.y + (event.clientY - dragStart.y) }; renderGraph(); });
