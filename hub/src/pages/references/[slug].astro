@@ -9,8 +9,17 @@ export function getStaticPaths(){return readAcademicRecords('references',{public
 const {record}=Astro.props;
 const apa=formatCitation(record,{style:'apa'}),ieee=formatCitation(record,{style:'ieee'}),bibtex=exportBibTeX([record]);
 let sourceURL='';try{sourceURL=safeReferenceURL(record.provenance?.sourceURL||'');}catch{}
+const scholarlyTypes=new Set(['article-journal','paper-conference','chapter','thesis','report','preprint']);
+const referenceSchema={
+  '@context':'https://schema.org', '@type':scholarlyTypes.has(record.type)?'ScholarlyArticle':'CreativeWork',
+  name:record.title||record.citationKey, headline:record.title||record.citationKey,
+  author:(record.authors||[]).map((author:any)=>author.literal?{'@type':'Organization',name:author.literal}:{'@type':'Person',name:authorLabel(author)}),
+  ...(record.year?{datePublished:String(record.year)}:{}), ...(record.doi?{sameAs:`https://doi.org/${encodeURIComponent(record.doi)}`}:{}),
+  url:new URL(url(`/references/${record.id.slice('reference:'.length)}/`),Astro.site).href,
+  ...(record.journal?{isPartOf:{'@type':'Periodical',name:record.journal}}:{}),
+};
 ---
-<BaseLayout title={record.title||record.citationKey} description={record.abstract||'Reference metadata, formatted citations, and connected research.'}>
+<BaseLayout title={record.title||record.citationKey} description={record.abstract||'Reference metadata, formatted citations, and connected research.'} structuredData={referenceSchema}>
   <article class="pub-shell" data-reference-detail data-reference-id={record.id}>
     <a class="back-link" href={url('/references/')}>← Academic bibliography</a>
     <header class="pub-header"><p class="eyebrow">{REFERENCE_TYPE_LABELS[record.type]||'REFERENCE'}</p><h1>{record.title||'Title not supplied'}</h1><p>{record.authors?.length?record.authors.map(authorLabel).join('; '):'Authors not supplied'}</p><div class="pub-meta"><span>{record.year||'Year not supplied'}</span><code>{record.citationKey}</code>{(record.tags||[]).map((tag:string)=><span class="pub-badge">{tag}</span>)}</div></header>

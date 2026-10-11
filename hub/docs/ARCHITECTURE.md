@@ -33,6 +33,10 @@ YAML profile + Markdown / MDX + public files
 
 文件夹 slug 是 canonical route；同类 slug 唯一。日期与状态由 metadata 决定，不依赖构建时随机日期或不完整 Git history。导入清单不是第二份主页配置，修改展示字段只改 index frontmatter。
 
+Owner Dashboard 位于已经认证的 `/owner/` workspace 内，不是公开内容路由。它读取同一个 Owner snapshot，统计 Research、日志、Notes、File Library 与学术 JSON 记录，并生成只读的研究健康提醒。健康检查不会在渲染时写文件、补关系或把草稿标记为 published；远程发布前仍由 schema 和 backend 再次验证。
+
+学术 JSON 记录位于 `src/data/figures/`、`src/data/references/` 和 `src/data/packages/`。这些记录只保存 metadata 与稳定的 File Library ID，原始文件仍由 `src/data/files/` 和 `public/uploads/` 负责。公开页面通过 `public + published` 边界过滤记录，Owner Dashboard 可以看见本地草稿以便提醒缺失项。
+
 Astro Content Collections 是渲染 schema 的最终依据。独立 source validator 额外检查本地文件、重复 slug、日志项目关系与上传策略；构建后 checker 校验实际 HTML 的路径和锚点。每一种检查承担不同失败面，不将外部网络可达性混入可重现的构建。
 
 ## URL、部署与源码链接
@@ -74,7 +78,7 @@ SSG 页面无需 hydration 才能阅读；Pagefind 索引和 Mermaid 按需加�
 - Publications schema 保留 Paper / Conference / Poster / Talk / Software / Dataset；当前没有虚构的成果。
 - 引用先采用明确 reference list；自动 BibTeX / CSL 文献系统可独立扩展。
 - Profile 可保存中文和英文资料，当前 UI 默认英文；完整双语内容、路由、SEO hreflang 与切换是后续阶段。
-- 第一期不需要远程 CMS。未来 OAuth / Decap / 托管 CMS 需要重新设计授权与部署边界，不能把 token 写入浏览器解决。
+- Owner CMS 已通过独立 backend 提供 GitHub App 登录、同源会话、CSRF、revision 检查和原子发布；浏览器只持有短期会话，不保存 GitHub token。公开 Pages 仍是静态只读站点，草稿和 Owner 操作不进入公开路由。
 - Folder import 是受控复制与发布准备，不是原始科学归档的同步或备份工具。
 
 ## 官方技术参考

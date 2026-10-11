@@ -5,4 +5,18 @@
 .owner-dashboard-publishing h2{font-size:22px;margin:0 0 12px}
 .owner-dashboard-publishing p{font:13px/1.7 var(--font-sans);overflow-wrap:anywhere}
 .owner-dashboard-publishing .owner-row-actions{margin-top:16px;gap:18px}
+.owner-dashboard-health{margin:24px 0;padding:20px 24px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.owner-dashboard-health h2{font-size:22px;margin:0 0 6px}
+.owner-dashboard-health .owner-section-heading{align-items:flex-start}
+.owner-health-badge{display:inline-flex;align-items:center;border:1px solid color-mix(in srgb,var(--accent) 45%,var(--line));border-radius:999px;padding:5px 10px;color:var(--accent);font-size:12px;white-space:nowrap}
+.owner-health-badge-warning{color:var(--warning,#a35b19);border-color:color-mix(in srgb,var(--warning,#a35b19) 55%,var(--line))}
+.owner-health-list{display:grid;gap:10px;margin-top:16px}
+.owner-health-row{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:14px 0;border-top:1px solid var(--line)}
+.owner-health-row:first-child{border-top:0}
+.owner-health-row strong{font-size:15px}
+.owner-health-row p{margin:4px 0 0;font:12px/1.5 var(--font-sans);overflow-wrap:anywhere}
+.owner-health-reminder{color:var(--warning,#a35b19)}
+.owner-health-ok{color:var(--accent)}
+.owner-health-score{font:13px ui-monospace,SFMono-Regular,Consolas,monospace;color:var(--muted)}
 @media(max-width:480px){.owner-dashboard-summary{grid-template-columns:repeat(2,minmax(0,1fr))}.owner-dashboard-publishing{padding:18px}}
+@media(max-width:620px){.owner-dashboard-health{padding:18px}.owner-health-row{align-items:flex-start;flex-direction:column}.owner-health-row .owner-row-actions{width:100%;justify-content:space-between}}

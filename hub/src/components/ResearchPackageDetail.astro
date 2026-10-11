@@ -14,8 +14,15 @@ const {record,current=record,versioned=false}=Astro.props,files=getFiles(),recor
 const figures=new Map(readAcademicRecords('figures',{publicOnly:true}).map(item=>[item.id,item])),references=new Map(readAcademicRecords('references',{publicOnly:true}).map(item=>[item.id,item]));
 const sections=await Promise.all(['description','environment','parameters','steps','notes'].map(async key=>({key,title:{description:'Overview',environment:'Software environment',parameters:'Parameters',steps:'Processing procedure',notes:'Known issues / notes'}[key],html:await renderFileDescription(typeof entry[key]==='string'?entry[key]:'```json\n'+JSON.stringify(entry[key],null,2)+'\n```',import.meta.env.BASE_URL)})));
 const labels:Record<string,string>={inputs:'Input data',code:'Source code',configuration:'Configuration',intermediate:'Intermediate results',outputs:'Final outputs',documentation:'Documentation'},versions=packageVersions(current).filter(isPublishedAcademic);
+const packageSchema={
+  '@context':'https://schema.org', '@type':'Dataset', name:entry.title, description:entry.description,
+  version:entry.version, dateCreated:entry.date, dateModified:entry.updated,
+  url:publicURL, license:entry.license&&entry.license!=='Unknown'?entry.license:undefined,
+  creator:entry.authors?.length?entry.authors.map((name:string)=>({'@type':'Person',name})):undefined,
+  isBasedOn:entry.relatedResearch?.map((id:string)=>new URL(url(`/research/${id.replace(/^research:/,'')}/`),Astro.site).href),
+};
 ---
-<BaseLayout title={`${entry.title} — v${entry.version}`} description={entry.description}>
+<BaseLayout title={`${entry.title} — v${entry.version}`} description={entry.description} structuredData={packageSchema}>
  <div class="pub-shell" data-owner-package-id={entry.id} data-package-detail>
   <nav class="pub-nav" aria-label="Breadcrumb"><a href={url('/packages/')}>Research packages</a>{versioned&&<a href={url(packagePath(current))}>Current version</a>}</nav>
   <header class="pub-header"><p class="eyebrow">RESEARCH REPRODUCIBILITY / VERSION {entry.version}</p><h1>{entry.title}</h1><p class="pub-meta"><time datetime={entry.date}>{formatDate(entry.date)}</time> · Updated {formatDate(entry.updated)} · {entry.authors.length?entry.authors.join(', '):'Authors unspecified'}</p><p><span class="pub-badge">{entry.status}</span></p>{versioned&&entry.version!==current.version&&<p class="pub-card">This is the immutable v{entry.version} metadata snapshot. File checksums below distinguish its recorded bytes from the current Library metadata.</p>}</header>

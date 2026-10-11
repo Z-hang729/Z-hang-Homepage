@@ -11,7 +11,7 @@ import {readKnowledgeGraph} from '../../scripts/knowledge-source.mjs';
 import {connectionsFor} from '../lib/knowledge.mjs';
 import {getCourseChapters,getChapterNeighbors,chapterIdentity} from '../lib/notes.mjs';
 import { getFiles } from '../lib/file-records';
-import { url, siteConfig } from '../lib/site';
+import { url, siteConfig, profile } from '../lib/site';
 import { allEntries, dateLabel, entryPath, escapeXML, readingMinutes, sortLatest, tagSlug,getDocuments } from '../lib/content';
 import type { Heading, HubEntry } from '../lib/content';
 import '../styles/academic.css';
@@ -57,6 +57,14 @@ const repo = siteConfig.repo;
 const sourceFile = documentPath ? documentPath.replace('/src/content/', 'src/content/') : `src/content/${entry.collection}/${entry.id}/index.${entry.filePath?.endsWith('.mdx') ? 'mdx' : 'md'}`;
 const sourceURL = repo ? `${repo.replace(/\/$/, '')}/blob/main/hub/${sourceFile.split('/').map(encodeURIComponent).join('/')}` : undefined;
 const editURL = sourceURL?.replace('/blob/', '/edit/');
+const schemaType = entry.collection === 'research' ? 'ResearchProject' : entry.collection === 'projects' ? 'CreativeWork' : 'LearningResource';
+const structuredData = {
+  '@context': 'https://schema.org', '@type': schemaType, name: title, description: data.description,
+  url: new URL(url(documentPath ? documentPath : entryPath(entry)), Astro.site).href,
+  dateCreated: data.date.toISOString(), dateModified: data.updated.toISOString(),
+  keywords: data.tags, author: { '@type': 'Person', name: profile.displayName },
+  ...(entry.collection === 'notes' ? { learningResourceType: 'Course notes', isPartOf: { '@type': 'CreativeWork', name: noteData?.course || data.title } } : {}),
+};
 
 type Tree = { dirs: Map<string, Tree>; files: { title: string; href: string }[] };
 const fileTree: Tree = { dirs: new Map(), files: [] };
@@ -71,7 +79,7 @@ function treeHTML(tree: Tree): string {
   return '<ul>' + directories + files + '</ul>';
 }
 ---
-<BaseLayout title={title} description={data.description}>
+<BaseLayout title={title} description={data.description} structuredData={structuredData}>
   <div class="container reading-shell" data-pagefind-body>
     <nav class="breadcrumb" aria-label="Breadcrumb" data-pagefind-ignore><a href={url('/')}>Home</a><span aria-hidden="true">/</span><a href={url(`/${entry.collection}/`)}>{sectionName}</a>{documentTitle && <><span aria-hidden="true">/</span><a href={url(entryPath(entry))}>{data.title}</a></>}<span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
     <header class="reading-header">

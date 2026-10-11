@@ -26,7 +26,7 @@
 
 真实线上浏览器验证已通过搜索、主题保留、手机布局、数学与图表、PDF、归档筛选，以及访客没有编辑控制。完整范围与本地证据见 [VERIFICATION.md](VERIFICATION.md)。后续 commit 的部署不能复用此首版成功状态，必须核对各自的准确 SHA。
 
-上述首版未配置 `PUBLIC_OWNER_BACKEND_URL`。静态网站上线不代表线上编辑器身份验证已经完成；后续 GitHub App、服务端配置、生产 owner OAuth 和编辑提交的状态由实际验证结果补充。
+上述首版未配置 `PUBLIC_OWNER_BACKEND_URL`，这只是 2026-10-04 的历史发布记录。当前 workflow 从 GitHub Actions Variable 读取公开 Worker origin，Owner CMS 的 GitHub App、OAuth callback、CSRF、revision 检查和整批发布状态以 `docs/OWNER-CMS.md` 与最新线上验证为准；静态 Pages 仍只提供公开只读页面。
 
 ## 后续发布与核对
 
