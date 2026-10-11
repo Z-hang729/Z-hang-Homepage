@@ -26,6 +26,19 @@ document.querySelector(".menu-toggle")?.addEventListener("click", (event) => {
 });
 const dialog = document.querySelector("#search-dialog") as HTMLDialogElement;
 let searchLoaded = false;
+const escapeSearchMeta = (value: unknown) => String(value ?? "").replace(/[&<>\"']/g, (char) => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[char] || char));
+function decorateSearchResult(result: {meta?: Record<string, unknown>; excerpt?: string}) {
+  const meta = result?.meta || {};
+  const details = [
+    meta.type && `Type: ${meta.type}`,
+    (meta.updated || meta.date) && `Updated: ${meta.updated || meta.date}`,
+    meta.related && `Related: ${meta.related}`,
+  ].filter(Boolean).map(escapeSearchMeta);
+  if (details.length) result.excerpt = `<span class="global-search-meta">${details.join(" · ")}</span><br>${result.excerpt || ""}`;
+  return result;
+}
 async function openSearch() {
   dialog?.showModal();
   if(dialog&&!dialog.querySelector('[data-library-search-command]')){
@@ -59,6 +72,7 @@ async function openSearch() {
       element: "#global-search",
       showSubResults: true,
       showImages: false,
+      processResult: decorateSearchResult,
       baseUrl: base,
       bundlePath: `${base}pagefind/`,
     });

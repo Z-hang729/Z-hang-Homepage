@@ -24,3 +24,11 @@ test('owner command center keeps editor actions lazy and out of homepage markup'
   assert.match(client, /data-owner-knowledge-commands/);
   assert.doesNotMatch(client, /data-owner-homepage[^\n]*New Research Log/);
 });
+
+test('global Pagefind results retain type and optional publication context', async () => {
+  const client = await readFile(path.join(root, 'src/scripts/site-client.ts'), 'utf8');
+  assert.match(client, /processResult:\s*decorateSearchResult/);
+  assert.match(client, /Type: \$\{meta\.type\}/);
+  assert.match(client, /Updated: \$\{meta\.updated \|\| meta\.date\}/);
+  assert.match(client, /Related: \$\{meta\.related\}/);
+});
