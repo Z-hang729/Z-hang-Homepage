@@ -1,0 +1,30 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../../layouts/BaseLayout.astro';
+import { researchProtocol } from '../../../lib/research-platform.mjs';
+import { url, formatDate } from '../../../lib/site';
+import '../../../styles/research-workspace.css';
+
+export async function getStaticPaths() {
+  const entries = await getCollection('research');
+  return entries.map(entry => ({ params: { project: entry.id }, props: { entry } }));
+}
+const { entry } = Astro.props;
+const protocol = researchProtocol(entry);
+const openTasks = protocol.tasks.filter(task => !['completed', 'archived'].includes(task.status.toLowerCase()));
+const dateLabel = (value: string) => value ? formatDate(value) : 'No date';
+---
+<BaseLayout title={`${protocol.title} · Research plan`} description={`Research protocol and milestones for ${protocol.title}.`}>
+  <main class="workspace-shell" data-pagefind-body>
+    <nav class="workspace-breadcrumb" aria-label="Breadcrumb"><a href={url('/research/')}>Research</a><span aria-hidden="true">/</span><a href={url(`/research/${protocol.slug}/`)}>{protocol.title}</a><span aria-hidden="true">/</span><span>Plan</span></nav>
+    <header class="workspace-header"><div><p class="eyebrow">RESEARCH PROTOCOL</p><h1>{protocol.title}</h1><p class="workspace-lede">A read-only plan derived from the research question, existing tasks and experiment records.</p><p class="workspace-meta"><span>{protocol.tasks.length} tasks</span><span aria-hidden="true">·</span><span>{protocol.experiments.length} experiments</span>{protocol.updated && <><span aria-hidden="true">·</span><time datetime={protocol.updated}>Updated {formatDate(protocol.updated)}</time></>}</p></div><a class="button-secondary" href={url(`/research/${protocol.slug}/workspace/`)}>Open workspace →</a></header>
+
+    <section class="workspace-card" aria-labelledby="protocol-title"><p class="eyebrow">QUESTION AND HYPOTHESIS</p><h2 id="protocol-title">Protocol overview</h2><div class="workspace-overview-grid">{protocol.researchQuestion ? <div><h3>Research question</h3><p>{protocol.researchQuestion}</p></div> : <div><h3>Research question</h3><p class="workspace-empty">Not recorded yet.</p></div>}{protocol.hypothesis ? <div><h3>Hypothesis</h3><p>{protocol.hypothesis}</p></div> : <div><h3>Hypothesis</h3><p class="workspace-empty">Not recorded yet.</p></div>}<div><h3>Task completion</h3><p><strong>{Math.round(protocol.completion * 100)}%</strong> · {openTasks.length} open task{openTasks.length === 1 ? '' : 's'}</p></div></div></section>
+
+    <section class="workspace-card" aria-labelledby="milestones-title"><p class="eyebrow">MILESTONES</p><h2 id="milestones-title">Dated commitments</h2>{protocol.milestones.length ? <ol class="workspace-record-list">{protocol.milestones.map(item => <li class="workspace-record"><div class="workspace-section-heading"><div><h3>{item.title}</h3><p class="workspace-meta"><time datetime={item.date}>{dateLabel(item.date)}</time> · {item.status}</p></div><span class={`task-priority priority-${item.priority.toLowerCase()}`}>{item.priority}</span></div></li>)}</ol> : <p class="workspace-empty">No dated milestones are recorded. Add a due date to a task in Owner when a commitment is ready to be tracked.</p>}</section>
+
+    <section class="workspace-card" aria-labelledby="phases-title"><p class="eyebrow">EXPERIMENT PHASES</p><h2 id="phases-title">Work phases</h2>{protocol.phases.length ? <div class="workspace-relations">{protocol.phases.map(phase => <div><h3>{phase.title}</h3><p class="workspace-meta">{phase.experiments.length} experiment{phase.experiments.length === 1 ? '' : 's'}</p></div>)}</div> : <p class="workspace-empty">No experiment phases are recorded yet.</p>}</section>
+
+    <footer class="workspace-card"><p class="workspace-help">This page is a projection of existing Research data. Editing remains in Owner; no plan records or duplicate uploads are created here.</p></footer>
+  </main>
+</BaseLayout>

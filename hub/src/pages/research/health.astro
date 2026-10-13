@@ -1,0 +1,26 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { publicEntry, researchHealth, weeklyReview } from '../../lib/research-platform.mjs';
+import { formatDate, url } from '../../lib/site';
+import '../../styles/research-workspace.css';
+
+const entries = (await getCollection('research')).filter(publicEntry);
+const today = new Date().toISOString().slice(0, 10);
+const reports = entries.map(entry => researchHealth(entry, { today }));
+const review = weeklyReview(entries, { today });
+const findings = reports.flatMap(report => report.findings.map(finding => ({ ...finding, title: report.title })));
+const severityLabel = (severity: string) => severity === 'high' ? 'Needs attention' : severity === 'medium' ? 'Review soon' : 'Keep in view';
+---
+<BaseLayout title="Research health" description="A read-only review of research freshness, open tasks and recorded evidence.">
+  <main class="workspace-shell" data-pagefind-body>
+    <header class="workspace-header"><div><p class="eyebrow">RESEARCH HEALTH</p><h1>Weekly review.</h1><p class="workspace-lede">A quiet review surface derived from existing research records. It highlights evidence gaps without changing your data.</p><p class="workspace-meta"><time datetime={review.start}>{formatDate(review.start)}</time><span aria-hidden="true">→</span><time datetime={review.end}>{formatDate(review.end)}</time></p></div><a class="button-secondary" href={url('/research/')}>Browse research →</a></header>
+    <section class="workspace-stats" aria-label="Weekly review counts"><div class="workspace-stat"><strong>{review.changedProjects}</strong><span>updated projects</span></div><div class="workspace-stat"><strong>{review.completedTasks}</strong><span>completed tasks</span></div><div class="workspace-stat"><strong>{findings.length}</strong><span>findings</span></div><div class="workspace-stat"><strong>{reports.length}</strong><span>research records</span></div></section>
+
+    <section class="workspace-card" aria-labelledby="findings-title"><p class="eyebrow">REVIEW QUEUE</p><h2 id="findings-title">Actionable findings</h2>{findings.length ? <div class="workspace-record-list">{findings.map(finding => <article class="workspace-record"><div class="workspace-section-heading"><div><h3>{finding.message}</h3><p class="workspace-meta">{finding.title} · {finding.kind}</p></div><span class={`task-priority priority-${finding.severity === 'high' ? 'high' : finding.severity === 'medium' ? 'medium' : 'low'}`}>{severityLabel(finding.severity)}</span></div>{finding.kind === 'research' && <a class="text-link" href={url(`/research/${finding.sourceId.replace(/^research:/, '')}/`)}>Open research →</a>}</article>)}</div> : <div class="workspace-empty"><h3>Nothing requires attention.</h3><p>No overdue tasks, stale active records or missing experiment outputs were detected in the current public records.</p></div>}</section>
+
+    <section class="workspace-card" aria-labelledby="projects-title"><p class="eyebrow">PROJECT PULSE</p><h2 id="projects-title">Research records</h2>{reports.length ? <div class="workspace-record-list">{reports.map(report => <article class="workspace-record"><div class="workspace-section-heading"><div><h3><a href={url(`/research/${report.id.replace(/^research:/, '')}/`)}>{report.title}</a></h3><p class="workspace-meta">{report.updated ? `Updated ${formatDate(report.updated)}` : 'No update date recorded'}</p></div><strong>{Math.round(report.score * 100)}%</strong></div><p class="workspace-meta">{report.findings.length ? `${report.findings.length} finding${report.findings.length === 1 ? '' : 's'}` : 'No findings'}</p></article>)}</div> : <p class="workspace-empty">No public research records are available yet.</p>}</section>
+
+    <footer class="workspace-card"><p class="workspace-help">This review is informational only. It does not send notifications, alter statuses or create synthetic research data.</p></footer>
+  </main>
+</BaseLayout>

@@ -1,0 +1,19 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { researchCalendar } from '../lib/research-platform.mjs';
+import { formatDate, url } from '../lib/site';
+import '../styles/academic-publishing.css';
+
+const [research, notes, projects, logs] = await Promise.all([getCollection('research'), getCollection('notes'), getCollection('projects'), getCollection('logs')]);
+const events = researchCalendar({ research, notes, projects, logs });
+const months = [...new Set(events.map(event => event.date.slice(0, 7)))];
+const monthLabel = (month: string) => new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}-01T00:00:00Z`));
+---
+<BaseLayout title="Academic calendar" description="A dated view of research commitments, experiments, notes and project updates.">
+  <div class="container pub-shell">
+    <header class="page-intro pub-header"><p class="eyebrow">ACADEMIC CALENDAR</p><h1>Dates that move the work.</h1><p class="intro-description">A read-only calendar derived from published research records and existing task or experiment dates.</p><nav class="pub-nav" aria-label="Calendar tools"><a href={url('/research/health/')}>Weekly review</a><a href={url('/calendar.ics')} download>Download ICS</a><a href={url('/research/')}>Research</a></nav></header>
+    {events.length ? <div class="activity-timeline">{months.map(month => <section><h2>{monthLabel(month)}</h2><ol>{events.filter(event => event.date.startsWith(month)).map(event => <li class="activity-item"><div class="activity-date"><time datetime={event.date}>{formatDate(event.date)}</time><span>{event.kind}</span></div><article class="pub-card"><h3><a href={url(event.path)}>{event.title}</a></h3><p class="pub-meta">{event.status || 'Recorded date'} · <code>{event.relatedId}</code></p></article></li>)}</ol></section>)}</div> : <div class="pub-empty"><h2>No dated records yet.</h2><p>Add dates to existing research, task, experiment or log records when they are ready to be shared.</p></div>}
+    <p class="pub-meta">The calendar never creates events or duplicate records. It only reads dates already present in the academic archive.</p>
+  </div>
+</BaseLayout>

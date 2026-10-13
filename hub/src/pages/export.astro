@@ -1,0 +1,16 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { exportResearchPackage, publicEntry, researchProtocol } from '../lib/research-platform.mjs';
+import { url } from '../lib/site';
+
+const entries = (await getCollection('research')).filter(publicEntry);
+const cards = entries.map(entry => ({ entry, protocol: researchProtocol(entry), artifacts: exportResearchPackage(entry) }));
+---
+<BaseLayout title="Research exports" description="Citation and metadata exports for public research records.">
+  <div class="container pub-shell">
+    <header class="page-intro pub-header"><p class="eyebrow">RESEARCH EXPORTS</p><h1>Portable records.</h1><p class="intro-description">Download deterministic citation and metadata artifacts for public research records. Linked files remain in the File Library and are never duplicated here.</p></header>
+    {cards.length ? <div class="card-grid">{cards.map(({ protocol }) => <article class="content-card"><div class="card-content"><p class="eyebrow">{protocol.date || 'Undated'} · {protocol.status || 'Research'}</p><h2>{protocol.title}</h2><p>{protocol.description || 'Public research archive record.'}</p><div class="workspace-actions"><a class="text-link" href={url(`/research/${protocol.slug}/export.json`)}>Manifest JSON ↗</a><a class="text-link" href={url(`/research/${protocol.slug}/export.bib`)}>BibTeX ↗</a><a class="text-link" href={url(`/research/${protocol.slug}/export.cff`)}>CITATION.cff ↗</a></div></div></article>)}</div> : <div class="pub-empty"><h2>No public research exports yet.</h2><p>Public research records will appear here when they are ready to share.</p></div>}
+    <p class="pub-meta">Exports contain public metadata and stable relation IDs only. They do not copy private files or claim that code has been executed.</p>
+  </div>
+</BaseLayout>
