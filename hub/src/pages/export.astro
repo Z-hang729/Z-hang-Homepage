@@ -1,11 +1,11 @@
 ---
 import { getCollection } from 'astro:content';
 import BaseLayout from '../layouts/BaseLayout.astro';
-import { exportResearchPackage, publicEntry, researchProtocol } from '../lib/research-platform.mjs';
+import { publicEntry, researchProtocol } from '../lib/research-platform.mjs';
 import { url } from '../lib/site';
 
 const entries = (await getCollection('research')).filter(publicEntry);
-const cards = entries.map(entry => ({ entry, protocol: researchProtocol(entry), artifacts: exportResearchPackage(entry) }));
+const cards = entries.map(entry => ({ protocol: researchProtocol(entry) }));
 ---
 <BaseLayout title="Research exports" description="Citation and metadata exports for public research records.">
   <div class="container pub-shell">
