@@ -4,6 +4,6 @@ import { exportResearchPackage, publicEntry } from '../../../lib/research-platfo
 
 export const getStaticPaths: GetStaticPaths = async () => (await getCollection('research')).filter(publicEntry).map(entry => ({ params: { project: entry.id }, props: { entry } }));
 export const GET: APIRoute = ({ props }) => {
-  const body = exportResearchPackage(props.entry).json;
+  const body = exportResearchPackage(props.entry, { base: import.meta.env.BASE_URL }).json;
   return new Response(body, { headers: { 'Content-Type': 'application/json; charset=utf-8', 'Content-Disposition': 'attachment; filename="research-manifest.json"' } });
 };

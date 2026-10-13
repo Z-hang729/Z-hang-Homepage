@@ -183,8 +183,9 @@ function bibEscape(value) { return text(value).replace(/[{},]/g, match => `\\${m
 function authorsOf(value) { return list(value).map(author => typeof author === 'string' ? author : [author?.given, author?.family, author?.literal].filter(Boolean).join(' ')).filter(Boolean); }
 
 /** Build deterministic public citation and manifest artifacts for a research entry. */
-export function exportResearchPackage(entry, { files = [], figures = [], references = [], packages = [], generatedAt = '' } = {}) {
+export function exportResearchPackage(entry, { files = [], figures = [], references = [], packages = [], generatedAt = '', base = '/' } = {}) {
   const data = dataOf(entry), protocol = researchProtocol(entry), slug = slugOf(entry);
+  const researchPath = `${text(base).replace(/\/$/, '')}/research/${slug}/` || `/research/${slug}/`;
   const visible = value => value && text(value.visibility || 'public').toLowerCase() === 'public' && text(value.publicationStatus || 'published').toLowerCase() !== 'draft';
   const publicFiles = list(files).filter(visible).filter(file => {
     const relations = [...list(file.relatedResearch), file.researchId, file.relatedResearchId].filter(Boolean).map(value => text(value).replace(/^research:/, ''));
@@ -193,7 +194,7 @@ export function exportResearchPackage(entry, { files = [], figures = [], referen
   const title = text(data.title || slug), authors = authorsOf(data.authors);
   const manifest = { schemaVersion: PLATFORM_SCHEMA_VERSION, id: protocol.id, title, date: protocol.date, updated: protocol.updated, generatedAt: text(generatedAt), files: publicFiles.map(file => ({ id: file.id, name: file.originalName || file.name, sha256: file.sha256 || file.checksum || '', size: file.size ?? null, license: file.license || '' })), figures: list(figures).filter(visible).map(item => item.id || item.title).filter(Boolean), references: list(references).filter(visible).map(item => item.id || item.citationKey || item.title).filter(Boolean), packages: list(packages).filter(visible).map(item => item.id || item.title).filter(Boolean), relations: { files: protocol.files, figures: protocol.figures, references: protocol.references, packages: protocol.packages }, provenance: { research: protocol.id, tasks: protocol.tasks.map(task => task.id), experiments: protocol.experiments.map(experiment => experiment.id) } };
   const citationKey = `${slug || 'research'}_${protocol.date || 'undated'}`.replace(/[^a-zA-Z0-9_-]+/g, '_');
-  const bibtex = `@misc{${citationKey},\n  title = {${bibEscape(title)}},\n${authors.length ? `  author = {${bibEscape(authors.join(' and '))}},\n` : ''}${protocol.date ? `  year = {${protocol.date.slice(0, 4)}},\n` : ''}  note = {Research archive record},\n  url = {${bibEscape(`/research/${slug}/`)}}\n}\n`;
+  const bibtex = `@misc{${citationKey},\n  title = {${bibEscape(title)}},\n${authors.length ? `  author = {${bibEscape(authors.join(' and '))}},\n` : ''}${protocol.date ? `  year = {${protocol.date.slice(0, 4)}},\n` : ''}  note = {Research archive record},\n  url = {${bibEscape(researchPath)}}\n}\n`;
   const cff = ['cff-version: 1.2.0', `title: ${yamlQuote(title)}`, 'type: dataset', protocol.date ? `date-released: ${protocol.date}` : '', authors.length ? 'authors:' : '', ...authors.map(author => `  - name: ${yamlQuote(author)}`), 'keywords:', ...list(data.tags).map(tag => `  - ${yamlQuote(tag)}`)].filter(Boolean).join('\n') + '\n';
   return { manifest, json: JSON.stringify(manifest, null, 2) + '\n', bibtex, citationCff: cff };
 }
