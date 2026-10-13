@@ -49,12 +49,17 @@ const research = defineCollection({ loader: collectionLoader('research'), schema
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().min(1), description: z.string().default(''),
     status: z.enum(['Todo', 'In Progress', 'Completed', 'Archived']).default('Todo'),
     priority: z.enum(['Low', 'Medium', 'High']).default('Medium'), created: date.optional(), updated: date.optional(), dueDate: date.optional(),
-    relatedFiles: z.array(z.string()).default([]), relatedLogs: z.array(z.string()).default([]),
+    relatedFiles: z.array(z.string()).default([]), relatedLogs: z.array(z.string()).default([]), dependsOn: z.array(z.string()).default([]), evidenceIds: z.array(z.string()).default([]),
   })).default([]),
   experiments: z.array(z.object({
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().min(1), date, status: z.string().default('Planned'),
     inputFiles: z.array(z.string()).default([]), code: z.array(z.string()).default([]), parameters: z.record(z.string(), z.unknown()).default({}),
     environment: z.record(z.string(), z.unknown()).default({}), outputs: z.array(z.string()).default([]), figures: z.array(z.string()).default([]), notes: z.string().default(''),
+    runs: z.array(z.object({
+      id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), title: z.string().optional(), date: z.string().optional(), startedAt: z.string().optional(), finishedAt: z.string().optional(),
+      status: z.enum(['Planned', 'Running', 'Completed', 'Failed', 'Cancelled']).default('Planned'), inputFiles: z.array(z.string()).default([]), outputFiles: z.array(z.string()).default([]), figures: z.array(z.string()).default([]), logs: z.array(z.string()).default([]), code: z.array(z.string()).default([]),
+      codeVersion: z.record(z.string(), z.unknown()).default({}), parameters: z.record(z.string(), z.unknown()).default({}), environment: z.record(z.string(), z.unknown()).default({}), metrics: z.record(z.string(), z.unknown()).default({}), notes: z.string().default(''),
+    })).default([]),
   })).default([]),
   datasets: z.array(z.object({
     id: z.string().regex(/^[a-z0-9][a-z0-9-]*$/).optional(), name: z.string().min(1), type: z.string().default('Observation'), instrument: z.string().default(''),

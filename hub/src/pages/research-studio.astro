@@ -1,0 +1,56 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { buildDatasetCatalog, datasetCatalogSummary } from '../lib/dataset-catalog.mjs';
+import { buildExperimentRuns, summarizeRuns } from '../lib/research-runs.mjs';
+import { buildProvenanceBoard, provenanceSummary } from '../lib/provenance-board.mjs';
+import { publicEntry, researchCalendar } from '../lib/research-platform.mjs';
+import { getFiles } from '../lib/file-records';
+import { url } from '../lib/site';
+import '../styles/academic-publishing.css';
+
+const [research, notes, projects, logs] = await Promise.all([
+  getCollection('research'), getCollection('notes'), getCollection('projects'), getCollection('logs'),
+]);
+const files = getFiles();
+const publicResearch = research.filter(publicEntry);
+const datasets = buildDatasetCatalog(publicResearch as any, { files: files as any });
+const runs = buildExperimentRuns(publicResearch);
+const provenance = buildProvenanceBoard({ researchEntries: publicResearch as any, files: files as any });
+const events = researchCalendar({ research: publicResearch, notes, projects, logs });
+const tasks = publicResearch.reduce((total, entry) => total + (Array.isArray(entry.data.tasks) ? entry.data.tasks.length : 0), 0);
+const cards = [
+  ['Research protocol', '/research/', 'Questions, hypotheses, tasks and dated plans.', `${publicResearch.length} research records`],
+  ['Experiment runs', '/experiments/', 'Run status, parameters, environments and provenance.', `${summarizeRuns(runs).total} explicit runs`],
+  ['Dataset catalog', '/datasets/', 'Metadata, file integrity and lineage from one File Library.', `${datasetCatalogSummary(datasets).total} datasets`],
+  ['Code & figure provenance', '/provenance/', 'Trace research, experiments, code, figures and source files.', `${provenanceSummary(provenance).total} cards`],
+  ['Research health', '/research/health/', 'A quiet review queue for stale records, open work and missing evidence.', 'Weekly review'],
+  ['Academic calendar', '/calendar/', 'Published dates, milestones and experiment windows with ICS export.', `${events.length} dated records`],
+  ['Unified search', '/search/', 'Search by type, status, tag, date, relation and stable ID.', 'Faceted discovery'],
+  ['Static notebook', '/notebook/', 'Read-only notebook and workflow views; no code executes in the browser.', 'Safe rendering'],
+  ['Publication tracker', '/owner/publications/', 'Private submission stages, next actions and manuscript references.', 'Owner only'],
+  ['Citation exports', '/export/', 'Portable JSON, BibTeX, CITATION.cff and manifest records.', 'Reproducible export'],
+];
+---
+<BaseLayout title="Research studio" description="A unified control surface for research planning, evidence, reproducibility and scholarly publishing.">
+  <div class="container pub-shell research-studio">
+    <header class="page-intro pub-header">
+      <p class="eyebrow">RESEARCH STUDIO · v2</p>
+      <h1>One place for the work around the work.</h1>
+      <p class="intro-description">Ten connected tools for planning, recording, checking and sharing research. Each view is derived from the existing academic archive and File Library, so one record stays one record.</p>
+      <nav class="pub-nav" aria-label="Research studio navigation"><a href={url('/research/')}>Research archive</a><a href={url('/files/')}>File Library</a><a href={url('/academic/')}>Academic system</a><a href={url('/owner/')}>Owner workspace</a></nav>
+    </header>
+    <section class="pub-section" aria-labelledby="studio-modules">
+      <div class="pub-section-heading"><p class="pub-kicker">TEN CONNECTED FUNCTIONS</p><h2 id="studio-modules">Choose the surface you need.</h2></div>
+      <div class="pub-grid">{cards.map(([title, href, description, metric], index) => <article class="pub-card research-studio-card"><div class="research-studio-number">{String(index + 1).padStart(2, '0')}</div><h3><a href={url(href)}>{title}</a></h3><p>{description}</p><span class="pub-meta">{metric}</span></article>)}</div>
+    </section>
+    <section class="pub-section research-studio-snapshot" aria-labelledby="studio-snapshot">
+      <div class="pub-section-heading"><p class="pub-kicker">CURRENT ARCHIVE SNAPSHOT</p><h2 id="studio-snapshot">Only recorded facts.</h2></div>
+      <div class="pub-grid"><div class="pub-card"><strong>{publicResearch.length}</strong><span>public research records</span></div><div class="pub-card"><strong>{tasks}</strong><span>recorded research tasks</span></div><div class="pub-card"><strong>{files.length}</strong><span>File Library originals</span></div><div class="pub-card"><strong>{events.length}</strong><span>dated archive events</span></div></div>
+      <p class="pub-empty" role="note"><strong>Publication boundary:</strong> empty states are intentional. Drafts, private files and unpublished manuscript details stay in Owner and are never promoted into this public studio.</p>
+    </section>
+  </div>
+</BaseLayout>
+<style>
+  .research-studio-card{position:relative;min-height:190px}.research-studio-number{color:var(--solar);font:11px var(--font-mono);letter-spacing:.16em}.research-studio-card h3{margin-top:2.1rem}.research-studio-card p{min-height:3.2em}.research-studio-card .pub-meta{display:block;margin-top:1rem}.research-studio-snapshot .pub-grid{grid-template-columns:repeat(4,minmax(0,1fr))}.research-studio-snapshot .pub-card{display:flex;flex-direction:column;gap:.5rem}.research-studio-snapshot .pub-card strong{font:2rem var(--font-mono);color:var(--accent)}.research-studio-snapshot .pub-card span{font-size:.8rem;color:var(--muted)}@media(max-width:700px){.research-studio-snapshot .pub-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>

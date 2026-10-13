@@ -9,14 +9,15 @@ import {readAcademicRecords} from '../lib/academic-records.mjs';
 export const GET: APIRoute = async ({ site }) => {
   if (!site) throw new Error('SITE_URL is required to generate the sitemap.');
   const entries = await allEntries();
-  const staticPaths = ['/', '/research/', '/notes/', '/projects/', '/about/', '/cv/', '/publications/', '/search/', '/tags/', '/changelog/','/academic/','/figures/','/references/','/activity/','/packages/','/knowledge/'];
+  const staticPaths = ['/', '/research/', '/notes/', '/projects/', '/about/', '/cv/', '/publications/', '/search/', '/tags/', '/changelog/','/academic/','/figures/','/references/','/activity/','/packages/','/knowledge/', '/research-studio/', '/calendar/', '/export/', '/workflow/', '/notebook/', '/datasets/', '/experiments/', '/provenance/', '/research/health/'];
   const tags = [...new Set(entries.flatMap((entry) => entry.data.tags.map(tagSlug)))].map((tag) => `/tags/${tag}/`);
   const documents = (['research', 'notes', 'projects'] as const).flatMap((kind) => getDocuments(kind).map((document) => `/${kind}/${document.slug}/`));
   const files=getFiles();
   const logs=await getCollection('logs');
   const workspacePaths=entries.filter(entry=>entry.collection==='research').map(entry=>`/research/${entry.id}/workspace/`);
+  const planPaths=entries.filter(entry=>entry.collection==='research').map(entry=>`/research/${entry.id}/plan/`);
   const academicPaths=['figures','references','packages'].flatMap(kind=>readAcademicRecords(kind).map(record=>`/${kind}/${record.id.split(':')[1]}/`));
-  const paths = [...staticPaths,'/files/', ...workspacePaths, ...academicPaths,...tags, ...documents, ...entries.map(entryPath),...logs.map(log=>logPath(log)),...files.map(file=>stableFilePath(file.id))];
+  const paths = [...staticPaths,'/files/', ...workspacePaths, ...planPaths, ...academicPaths,...tags, ...documents, ...entries.map(entryPath),...logs.map(log=>logPath(log)),...files.map(file=>stableFilePath(file.id))];
   const timestamps = new Map(entries.map((entry) => [entryPath(entry), entry.data.updated.toISOString().slice(0, 10)]));
   for(const file of files)timestamps.set(stableFilePath(file.id),file.updatedAt.slice(0,10));
   for(const log of logs)timestamps.set(logPath(log),(log.data.updated||log.data.date).toISOString().slice(0,10));
