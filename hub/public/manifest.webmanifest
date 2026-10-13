@@ -1,0 +1,19 @@
+{
+  "name": "Z-hang Academic Homepage",
+  "short_name": "Z-hang Academic",
+  "description": "Research, notes, files, and scholarly work by Z-hang.",
+  "lang": "en",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f8f7f3",
+  "theme_color": "#f8f7f3",
+  "icons": [
+    {
+      "src": "icons/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "any",
+      "purpose": "any maskable"
+    }
+  ]
+}

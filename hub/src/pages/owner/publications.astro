@@ -1,0 +1,26 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import { PUBLICATION_STAGES, publicationLifecycleSummary } from '../../lib/publication-lifecycle.mjs';
+import { url } from '../../lib/site';
+
+const summary = publicationLifecycleSummary([]);
+---
+
+<BaseLayout title="Owner publication tracker" description="Private publication workflow for the site owner." noindex>
+  <div class="container publication-tracker" data-publication-tracker data-private="true">
+    <header class="page-intro">
+      <p class="eyebrow">OWNER WORKSPACE</p>
+      <h1>Publication tracker.</h1>
+      <p class="intro-description">Track a manuscript from draft to publication with explicit review boundaries. This route is a safe empty shell: private records are only loaded after Owner authentication and are never included in the public build.</p>
+      <div class="tracker-actions"><a class="button" href={url('/owner/')}>Open Owner sign in →</a><a class="button-secondary" href={url('/publications/')}>View public outputs</a></div>
+    </header>
+
+    <section class="tracker-boundary" aria-labelledby="tracker-boundary-heading"><p class="eyebrow">PUBLICATION BOUNDARY</p><h2 id="tracker-boundary-heading">Drafts stay private until you publish them.</h2><p>Use this tracker for manuscript files, venues, due dates, next actions, and review notes. The public Publications and Academic pages only display records that have passed review and been explicitly marked published.</p></section>
+    <section aria-labelledby="tracker-stages-heading"><div class="tracker-heading"><div><p class="eyebrow">LIFECYCLE</p><h2 id="tracker-stages-heading">Seven deliberate stages.</h2></div><p class="muted">No publication records are present in this public shell.</p></div><ol class="tracker-stages">{PUBLICATION_STAGES.map((stage, index) => <li><span>{String(index + 1).padStart(2, '0')}</span><strong>{stage}</strong><em>{summary[stage]}</em></li>)}</ol></section>
+    <p class="tracker-note" role="note">The tracker does not upload manuscripts, contact journals, or change publication status automatically. Owner review is always required.</p>
+  </div>
+</BaseLayout>
+
+<style>
+  .publication-tracker{padding-bottom:6rem}.tracker-actions{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.7rem}.tracker-boundary{max-width:780px;border-left:3px solid var(--solar);padding:1.1rem 1.3rem;background:var(--surface);border-block:1px solid var(--line);margin:2rem 0 3.2rem}.tracker-boundary h2{font:1.75rem var(--font-serif);margin:.5rem 0 .8rem}.tracker-boundary p:last-child{color:var(--muted);font-size:.9rem;line-height:1.7;margin:0}.tracker-heading{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1.4rem}.tracker-heading h2{font:2rem var(--font-serif);margin:.5rem 0 0}.tracker-stages{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));border:1px solid var(--line)}.tracker-stages li{display:flex;flex-direction:column;gap:.55rem;padding:1rem;border-right:1px solid var(--line);min-height:125px;background:var(--surface)}.tracker-stages li:last-child{border-right:0}.tracker-stages span{font:10px var(--font-mono);color:var(--solar)}.tracker-stages strong{font:1rem var(--font-serif);font-weight:400}.tracker-stages em{margin-top:auto;font:11px var(--font-mono);color:var(--muted);font-style:normal}.tracker-note{color:var(--muted);font-size:.8rem;line-height:1.6;margin-top:2rem}@media(max-width:900px){.tracker-stages{grid-template-columns:repeat(4,1fr)}.tracker-stages li:nth-child(4){border-right:0}.tracker-stages li:nth-child(n+5){border-top:1px solid var(--line)}}@media(max-width:600px){.tracker-heading{display:block}.tracker-heading>.muted{margin-top:.6rem}.tracker-stages{grid-template-columns:repeat(2,1fr)}.tracker-stages li:nth-child(odd){border-right:1px solid var(--line)}.tracker-stages li:nth-child(even){border-right:0}.tracker-stages li:nth-child(n+3){border-top:1px solid var(--line)}}
+</style>

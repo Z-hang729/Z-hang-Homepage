@@ -1,0 +1,48 @@
+---
+import { getCollection } from 'astro:content';
+import BaseLayout from '../layouts/BaseLayout.astro';
+import { formatDate, url } from '../lib/site';
+import { sortLatest } from '../lib/content';
+
+const research = sortLatest(await getCollection('research'));
+const projects = sortLatest(await getCollection('projects'));
+const outputs = sortLatest(await getCollection('publications'));
+const steps = [
+  { number: '01', title: 'Observe', text: 'Start with a question, instrument, or documented observation.', href: '/research/', label: 'Research archive' },
+  { number: '02', title: 'Organize', text: 'Keep source files in the File Library and retain their original names and provenance.', href: '/files/', label: 'File Library' },
+  { number: '03', title: 'Analyze', text: 'Record parameters, experiments, and code links in the Research Workspace.', href: research[0] ? `/research/${research[0].id}/workspace/` : '/research/', label: 'Research Workspace' },
+  { number: '04', title: 'Explain', text: 'Connect figures, notes, references, and reproducibility packages without copying data.', href: '/academic/', label: 'Academic publishing' },
+  { number: '05', title: 'Share', text: 'Publish only reviewed records; drafts and private material stay in the Owner workspace.', href: '/owner/', label: 'Owner workspace' },
+];
+---
+
+<BaseLayout title="Research workflow" description="A read-only map of the observation-to-publication workflow used by the academic hub.">
+  <div class="container workflow-page">
+    <header class="page-intro">
+      <p class="eyebrow">REPRODUCIBLE PRACTICE</p>
+      <h1>Research workflow.</h1>
+      <p class="intro-description">A static, read-only guide to how observations become documented research. The site displays code and outputs as references; it never executes code in the browser.</p>
+      <nav class="workflow-links" aria-label="Workflow navigation"><a class="button" href={url('/research/')}>Open research archive →</a><a class="button-secondary" href={url('/notebook/')}>Open research notebook</a></nav>
+    </header>
+
+    <section class="workflow-chain" aria-labelledby="workflow-chain-heading">
+      <div class="workflow-heading"><div><p class="eyebrow">READ-ONLY MAP</p><h2 id="workflow-chain-heading">From question to shared record.</h2></div><p class="muted">No notebook or analysis code runs here.</p></div>
+      <ol class="workflow-steps">
+        {steps.map((step) => <li><span class="workflow-number">{step.number}</span><div><h3>{step.title}</h3><p>{step.text}</p><a href={url(step.href)}>{step.label} ↗</a></div></li>)}
+      </ol>
+    </section>
+
+    <section class="workflow-snapshot" aria-labelledby="workflow-snapshot-heading">
+      <div class="workflow-heading"><div><p class="eyebrow">CURRENT INDEX</p><h2 id="workflow-snapshot-heading">What is connected now.</h2></div><a class="text-link" href={url('/knowledge/')}>Explore knowledge map →</a></div>
+      <div class="workflow-columns">
+        <div><h3>Research</h3>{research.length ? <ul>{research.slice(0, 4).map((entry) => <li><a href={url(`/research/${entry.id}/`)}>{entry.data.title}</a><span>{formatDate(entry.data.updated)}</span></li>)}</ul> : <p class="muted">No published research records yet.</p>}</div>
+        <div><h3>Projects</h3>{projects.length ? <ul>{projects.slice(0, 4).map((entry) => <li><a href={url(`/projects/${entry.id}/`)}>{entry.data.title}</a><span>{formatDate(entry.data.updated)}</span></li>)}</ul> : <p class="muted">No published project records yet.</p>}</div>
+        <div><h3>Published outputs</h3>{outputs.length ? <ul>{outputs.slice(0, 4).map((entry) => <li><a href={url('/publications/')}>{entry.data.title}</a><span>{formatDate(entry.data.date)}</span></li>)}</ul> : <p class="muted">No software or dataset records yet.</p>}<a class="text-link" href={url('/packages/')}>Browse research packages →</a></div>
+      </div>
+    </section>
+  </div>
+</BaseLayout>
+
+<style>
+  .workflow-page{padding-bottom:6rem}.workflow-links{display:flex;flex-wrap:wrap;gap:.7rem;margin-top:1.7rem}.workflow-heading{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin-bottom:1.4rem}.workflow-heading h2{font:2rem var(--font-serif);margin:.5rem 0 0}.workflow-chain{padding:2rem 0 3rem;border-bottom:1px solid var(--line)}.workflow-steps{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0}.workflow-steps li{position:relative;padding:1.2rem 1rem 1.2rem 1.2rem;border-top:2px solid var(--accent);background:var(--surface);min-height:220px}.workflow-steps li+li{border-left:1px solid var(--line)}.workflow-number{font:10px var(--font-mono);color:var(--solar)}.workflow-steps h3{font:1.4rem var(--font-serif);margin:2.3rem 0 .6rem}.workflow-steps p{font-size:.85rem;line-height:1.65;color:var(--muted);margin:0 0 1.1rem}.workflow-steps a{font-size:.75rem;color:var(--accent)}.workflow-snapshot{padding-top:3rem}.workflow-columns{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1rem}.workflow-columns>div{padding:1.2rem;border:1px solid var(--line);background:var(--surface)}.workflow-columns h3{font:1.25rem var(--font-serif);margin:0 0 1rem}.workflow-columns ul{list-style:none;padding:0;margin:0}.workflow-columns li{display:flex;flex-direction:column;gap:.15rem;padding:.65rem 0;border-top:1px solid var(--line)}.workflow-columns li:first-child{border-top:0;padding-top:0}.workflow-columns li a{font-size:.85rem;color:var(--accent)}.workflow-columns li span{font:10px var(--font-mono);color:var(--muted)}.workflow-columns p{font-size:.85rem}@media(max-width:950px){.workflow-steps{grid-template-columns:repeat(3,minmax(0,1fr))}.workflow-steps li:nth-child(4){border-left:0;border-top:1px solid var(--line)}.workflow-steps li:nth-child(5){border-top:1px solid var(--line)}.workflow-columns{grid-template-columns:1fr 1fr}}@media(max-width:620px){.workflow-heading{display:block}.workflow-heading>.muted{margin-top:.5rem}.workflow-steps{grid-template-columns:1fr}.workflow-steps li,.workflow-steps li+li{border-left:0;border-top:1px solid var(--line);min-height:0}.workflow-steps li:first-child{border-top:2px solid var(--accent)}.workflow-steps h3{margin:1rem 0 .5rem}.workflow-columns{grid-template-columns:1fr}}
+</style>
