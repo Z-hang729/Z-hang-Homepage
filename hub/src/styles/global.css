@@ -1569,6 +1569,10 @@ html[data-theme="dark"] .astro-code span {
 html[data-language="zh-CN"] {
   --font-sans: "KaiTi", "STKaiti", "DFKai-SB", "Microsoft JhengHei", serif;
   --font-serif: "KaiTi", "STKaiti", "DFKai-SB", serif;
+  --font-mono: "KaiTi", "STKaiti", "DFKai-SB", serif;
+}
+html[data-language="zh-CN"] :is(pre, code, kbd) {
+  --font-mono: "SFMono-Regular", Consolas, monospace;
 }
 html[data-language="zh-CN"] .eyebrow,
 html[data-language="zh-CN"] .card-meta,

@@ -11,6 +11,7 @@ for (const root of roots) {
   let renderScene;
   let loading;
   let selectionToken = 0;
+  let renderedId;
 
   const isChinese = () => document.documentElement.dataset.language === 'zh-CN';
   const optionLabel = (id) => {
@@ -63,7 +64,7 @@ for (const root of roots) {
     try {
       const renderer = await loadRenderer();
       if (token !== selectionToken) return;
-      renderer?.(id, dynamic, { reducedMotion: prefersReducedMotion() });
+      if (renderer?.(id, dynamic, { reducedMotion: prefersReducedMotion() })) renderedId = id;
     } catch (error) {
       if (token !== selectionToken) return;
       // The base illustration remains useful if an optional scene chunk fails.
@@ -85,7 +86,7 @@ for (const root of roots) {
     const selectedId = options.find((option) => option.getAttribute('aria-pressed') === 'true')?.dataset.animationId || 'solar-wind';
     showFallback(selectedId);
     updateStatus(selectedId);
-    if (selectedId !== 'solar-wind' && dynamic && !dynamic.hidden && !dynamic.innerHTML.trim()) choose(selectedId);
+    if (selectedId !== 'solar-wind' && dynamic && !dynamic.hidden && renderedId !== selectedId) choose(selectedId);
   }, { passive: true });
 }
 

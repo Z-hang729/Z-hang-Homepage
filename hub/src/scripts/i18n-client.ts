@@ -1,7 +1,14 @@
+import { READING_TRANSLATIONS } from '../lib/i18n-reading';
+import { EXTRA_UI_TRANSLATIONS } from '../lib/i18n-extra';
+
 type Language = 'en' | 'zh-CN';
 
 const DICTIONARY: Record<string, string> = {
+  ...EXTRA_UI_TRANSLATIONS,
+  ...READING_TRANSLATIONS,
   Home: '主页', Research: '研究', Notes: '笔记', Projects: '项目', About: '关于', CV: '简历', Files: '文件', Notebook: '笔记本', Workflow: '流程',
+  'Search Files ↗': '搜索文件 ↗', 'Close navigation': '关闭导航', 'Space Physics': '空间物理', 'Computer Science': '计算机科学', 'Computer Science and Technology': '计算机科学与技术',
+  Filters: '筛选', 'Load more results': '加载更多结果', 'Results will appear as you type': '输入时将显示搜索结果', Loading: '加载中', 'Search failed': '搜索失败', navigate: '浏览', select: '选择', close: '关闭', search: '搜索',
   'Skip to content': '跳转到正文', 'Back to top ↑': '返回顶部 ↑', 'Source on GitHub ↗': '在 GitHub 查看源代码 ↗', 'Owner sign in': '所有者登录',
   'Between the': '在', 'Sun & the code.': '太阳与代码之间。', 'Undergraduate student · 2024': '本科生 · 2024',
   CURRENTLY: '当前', Researching: '研究中', Learning: '学习中',
@@ -44,7 +51,48 @@ const LANG_KEY = 'zh-language';
 const textOriginals = new WeakMap<Text, { original: string; lastApplied: string }>();
 const attributeOriginals = new WeakMap<Element, Map<string, { original: string; lastApplied: string }>>();
 const normalise = (value: string) => value.replace(/\s+/g, ' ').trim();
-const translate = (value: string, language: Language) => language === 'zh-CN' ? (DICTIONARY[normalise(value)] || value) : value;
+const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+function translate(value: string, selected: Language): string {
+  if (selected !== 'zh-CN') return value;
+  const text = normalise(value);
+  if (Object.hasOwn(DICTIONARY, text)) return DICTIONARY[text];
+  let match = text.match(/^(\d+) entr(?:y|ies)$/);
+  if (match) return `${match[1]} 条记录`;
+  match = text.match(/^(\d+) of (\d+) files$/);
+  if (match) return `${match[1]} / ${match[2]} 个文件`;
+  match = text.match(/^(\d+) min read$/);
+  if (match) return `${match[1]} 分钟阅读`;
+  match = text.match(/^(\d+) nodes · (\d+) connections available$/);
+  if (match) return `${match[1]} 个节点 · ${match[2]} 条关联`;
+  match = text.match(/^(\d+) (?:finding|findings)$/);
+  if (match) return `${match[1]} 项发现`;
+  match = text.match(/^Archive progress (\d+)%$/);
+  if (match) return `归档进度 ${match[1]}%`;
+  match = text.match(/^(\d{4}) (Spring|Summer|Fall|Autumn|Winter)$/);
+  if (match) return `${match[1]} 年${({Spring:'春',Summer:'夏',Fall:'秋',Autumn:'秋',Winter:'冬'} as Record<string,string>)[match[2]]}季`;
+  match = text.match(/^([A-Z][a-z]{2}) (\d{1,2}), (\d{4})$/);
+  if (match && months.includes(match[1])) return `${match[3]} 年 ${months.indexOf(match[1]) + 1} 月 ${Number(match[2])} 日`;
+  match = text.match(/^(January|February|March|April|May|June|July|August|September|October|November|December) (\d{4})$/);
+  if (match) return `${match[2]} 年 ${months.indexOf(match[1].slice(0,3)) + 1} 月`;
+  match = text.match(/^(Updated|Created|Last updated|Due|Recorded date)(:?\s*·?\s*)(.+)$/);
+  if (match) return `${({Updated:'更新于',Created:'创建于','Last updated':'最后更新于',Due:'截止于','Recorded date':'记录日期'} as Record<string,string>)[match[1]]}${match[2]}${translate(match[3], selected)}`;
+  match = text.match(/^Undergraduate student · (\d{4})(.*)$/);
+  if (match) return `本科生 · ${match[1]}${match[2]}`;
+  match = text.match(/^No results for (.+)$/);
+  if (match) return `没有与 ${match[1]} 相关的结果`;
+  match = text.match(/^Searching for (.+)\.\.\.$/);
+  if (match) return `正在搜索 ${match[1]}…`;
+  match = text.match(/^(\d+) selected$/);
+  if (match) return `已选择 ${match[1]} 项`;
+  match = text.match(/^(\d+) results? for (.+)$/);
+  if (match) return `找到 ${match[1]} 条与 ${match[2]} 相关的结果`;
+  match = text.match(/^(\d+) results?$/);
+  if (match) return `${match[1]} 条结果`;
+  match = text.match(/^(\d+) published activit(?:y|ies)$/);
+  if (match) return `${match[1]} 条公开动态`;
+  if (text.includes(' · ')) return text.split(' · ').map(part => translate(part, selected)).join(' · ');
+  return value;
+}
 
 function language(): Language {
   return document.documentElement.dataset.language === 'zh-CN' ? 'zh-CN' : 'en';
@@ -52,7 +100,7 @@ function language(): Language {
 
 function shouldSkip(node: Node) {
   const parent = node.parentElement;
-  return Boolean(parent?.closest('script,style,pre,code,kbd,[data-i18n-skip]'));
+  return Boolean(parent?.closest('script,style,code,kbd,textarea,[contenteditable],.katex,[data-i18n-skip]') || (parent?.closest('pre') && !parent?.closest('button')));
 }
 
 function applyText(root: ParentNode, selected: Language) {
@@ -70,7 +118,10 @@ function applyText(root: ParentNode, selected: Language) {
     const trailing = original.match(/\s*$/)?.[0] || '';
     const core = original.slice(leading.length, original.length - trailing.length || undefined);
     const translated = translate(core, selected);
-    node.nodeValue = `${leading}${translated}${trailing}`;
+    const option = node.parentElement?.closest('option');
+    if (option && !option.hasAttribute('value')) option.setAttribute('value', option.textContent || '');
+    const next = `${leading}${translated}${trailing}`;
+    if (node.nodeValue !== next) node.nodeValue = next;
     const updated = textOriginals.get(node);
     if (updated) updated.lastApplied = node.nodeValue;
   }
@@ -79,6 +130,7 @@ function applyText(root: ParentNode, selected: Language) {
 function applyAttributes(root: ParentNode, selected: Language) {
   const elements = root.querySelectorAll ? [...root.querySelectorAll<HTMLElement>('[aria-label],[title],[placeholder]')] : [];
   for (const element of elements) {
+    if (element.closest?.('[data-i18n-skip]')) continue;
     let originals = attributeOriginals.get(element);
     if (!originals) { originals = new Map(); attributeOriginals.set(element, originals); }
     for (const attribute of ['aria-label', 'title', 'placeholder']) {
@@ -88,7 +140,7 @@ function applyAttributes(root: ParentNode, selected: Language) {
       if (!record) originals.set(attribute, { original: value, lastApplied: value });
       else if (value !== record.lastApplied) record.original = value;
       const translated = translate(originals.get(attribute)?.original || value, selected);
-      element.setAttribute(attribute, translated);
+      if (value !== translated) element.setAttribute(attribute, translated);
       const updated = originals.get(attribute);
       if (updated) updated.lastApplied = translated;
     }
@@ -120,11 +172,11 @@ document.querySelector<HTMLButtonElement>('[data-language-toggle]')?.addEventLis
 });
 
 const observer = new MutationObserver((mutations) => {
-  if (!document.documentElement.dataset.language || !mutations.some(mutation => mutation.addedNodes.length)) return;
+  if (!document.documentElement.dataset.language || !mutations.some(mutation => mutation.type === 'characterData' || mutation.type === 'attributes' || mutation.addedNodes?.length)) return;
   applyText(document.body, language());
   applyAttributes(document.body, language());
 });
-observer.observe(document.body, { childList: true, subtree: true });
+observer.observe(document.body, { childList: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'title', 'placeholder'], subtree: true });
 
 
 

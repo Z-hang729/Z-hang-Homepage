@@ -85,7 +85,7 @@ function treeHTML(tree: Tree): string {
     <nav class="breadcrumb" aria-label="Breadcrumb" data-pagefind-ignore><a href={url('/')}>Home</a><span aria-hidden="true">/</span><a href={url(`/${entry.collection}/`)}>{sectionName}</a>{documentTitle && <><span aria-hidden="true">/</span><a href={url(entryPath(entry))}>{data.title}</a></>}<span aria-hidden="true">/</span><span aria-current="page">{title}</span></nav>
     <header class="reading-header">
       <div class="article-kicker"><span class="eyebrow">{sectionName} / {noteData ? noteData.category : 'Field notebook'}</span>{data.demo && <span class="demo-label">Demo</span>}</div>
-      <h1 data-pagefind-meta="title">{title}</h1>
+      <h1 data-i18n-skip data-pagefind-meta="title">{title}</h1>
       <p class="article-description" data-pagefind-meta="description">{data.description}</p>
       <div class="article-meta"><span>Updated <time datetime={data.updated.toISOString()}>{dateLabel(data.updated)}</time></span><span>{reading} min read</span>{(researchData || projectData) && <span class={`status status-${(researchData?.status || projectData!.status).toLowerCase().replaceAll(' ', '-')}`}>{researchData?.status || projectData!.status}</span>}{noteData && <span>{noteData.semester} · {noteData.course}{noteData.courseCode && ` (${noteData.courseCode})`}{noteData.courseType && ` · ${noteData.courseType}`}</span>}</div>
       {noteData && <div class="course-progress"><span>Archive progress <strong>{noteData.progress}%</strong></span><progress value={noteData.progress} max="100" aria-label="Course notes archive progress">{noteData.progress}%</progress></div>}

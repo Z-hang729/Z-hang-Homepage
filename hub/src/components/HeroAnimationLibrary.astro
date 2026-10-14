@@ -33,6 +33,7 @@ const selected = animations.some((animation) => animation.id === defaultAnimatio
           type="button"
           class="hero-animation-option"
           data-animation-id={animation.id}
+          data-i18n-skip
           aria-pressed={animation.id === selected ? 'true' : 'false'}
           aria-label={`${animation.label}: ${animation.description}`}
           data-label-en={animation.shortLabel}
@@ -46,7 +47,7 @@ const selected = animations.some((animation) => animation.id === defaultAnimatio
         </button>
       ))}
     </div>
-    <p class="hero-animation-status" data-hero-animation-status aria-live="polite">
+    <p class="hero-animation-status" data-i18n-skip data-hero-animation-status aria-live="polite">
       {animations.find((animation) => animation.id === selected)?.description}
     </p>
     <p class="hero-animation-note">Illustrations are conceptual and not to scale.</p>
