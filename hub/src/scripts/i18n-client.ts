@@ -11,6 +11,7 @@ const DICTIONARY: Record<string, string> = {
   Filters: '筛选', 'Load more results': '加载更多结果', 'Results will appear as you type': '输入时将显示搜索结果', Loading: '加载中', 'Search failed': '搜索失败', navigate: '浏览', select: '选择', close: '关闭', search: '搜索',
   'Research progress timeline': '研究进展时间线', 'Research progress summary': '研究进展概览', 'Current status': '当前状态', 'Expand all': '全部展开', 'Collapse all': '全部收起', 'Read full log →': '阅读完整日志 →', 'No logs match these filters.': '没有符合筛选条件的日志。', 'No research logs yet.': '尚无研究日志。', Example: '示例',
   Copy: '复制', 'Copy code': '复制代码', 'Enlarge ↗': '放大 ↗', 'Close ×': '关闭 ×', 'Close enlarged figure': '关闭放大图表', 'Download Original ↓': '下载原始文件 ↓',
+  Open: '打开', 'Open PDF': '打开 PDF', 'PDF DOCUMENT': 'PDF 文档', 'Preview document': '预览文档', Use: '使用', 'if your browser does not show the preview.': '如果浏览器未显示预览。',
   'Skip to content': '跳转到正文', 'Back to top ↑': '返回顶部 ↑', 'Source on GitHub ↗': '在 GitHub 查看源代码 ↗', 'Owner sign in': '所有者登录',
   'Between the': '在', 'Sun & the code.': '太阳与代码之间。', 'Undergraduate student · 2024': '本科生 · 2024',
   CURRENTLY: '当前', Researching: '研究中', Learning: '学习中',
