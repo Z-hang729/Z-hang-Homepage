@@ -9,6 +9,8 @@ const DICTIONARY: Record<string, string> = {
   Home: '主页', Research: '研究', Notes: '笔记', Projects: '项目', About: '关于', CV: '简历', Files: '文件', Notebook: '笔记本', Workflow: '流程',
   'Search Files ↗': '搜索文件 ↗', 'Close navigation': '关闭导航', 'Space Physics': '空间物理', 'Computer Science': '计算机科学', 'Computer Science and Technology': '计算机科学与技术',
   Filters: '筛选', 'Load more results': '加载更多结果', 'Results will appear as you type': '输入时将显示搜索结果', Loading: '加载中', 'Search failed': '搜索失败', navigate: '浏览', select: '选择', close: '关闭', search: '搜索',
+  'Research progress timeline': '研究进展时间线', 'Research progress summary': '研究进展概览', 'Current status': '当前状态', 'Expand all': '全部展开', 'Collapse all': '全部收起', 'Read full log →': '阅读完整日志 →', 'No logs match these filters.': '没有符合筛选条件的日志。', 'No research logs yet.': '尚无研究日志。', Example: '示例',
+  Copy: '复制', 'Copy code': '复制代码', 'Enlarge ↗': '放大 ↗', 'Close ×': '关闭 ×', 'Close enlarged figure': '关闭放大图表', 'Download Original ↓': '下载原始文件 ↓',
   'Skip to content': '跳转到正文', 'Back to top ↑': '返回顶部 ↑', 'Source on GitHub ↗': '在 GitHub 查看源代码 ↗', 'Owner sign in': '所有者登录',
   'Between the': '在', 'Sun & the code.': '太阳与代码之间。', 'Undergraduate student · 2024': '本科生 · 2024',
   CURRENTLY: '当前', Researching: '研究中', Learning: '学习中',
@@ -58,6 +60,10 @@ function translate(value: string, selected: Language): string {
   if (Object.hasOwn(DICTIONARY, text)) return DICTIONARY[text];
   let match = text.match(/^(\d+) entr(?:y|ies)$/);
   if (match) return `${match[1]} 条记录`;
+  match = text.match(/^(\d+) logs?$/);
+  if (match) return `${match[1]} 条日志`;
+  match = text.match(/^(\d+) examples?$/);
+  if (match) return `${match[1]} 条示例`;
   match = text.match(/^(\d+) of (\d+) files$/);
   if (match) return `${match[1]} / ${match[2]} 个文件`;
   match = text.match(/^(\d+) min read$/);
@@ -80,6 +86,8 @@ function translate(value: string, selected: Language): string {
   if (match) return `本科生 · ${match[1]}${match[2]}`;
   match = text.match(/^No results for (.+)$/);
   if (match) return `没有与 ${match[1]} 相关的结果`;
+  match = text.match(/^(Enlarge figure|Enlarged figure): (.+)$/);
+  if (match) return `${match[1] === 'Enlarge figure' ? '放大图表' : '放大后的图表'}：${translate(match[2], selected)}`;
   match = text.match(/^Searching for (.+)\.\.\.$/);
   if (match) return `正在搜索 ${match[1]}…`;
   match = text.match(/^(\d+) selected$/);
@@ -91,6 +99,7 @@ function translate(value: string, selected: Language): string {
   match = text.match(/^(\d+) published activit(?:y|ies)$/);
   if (match) return `${match[1]} 条公开动态`;
   if (text.includes(' · ')) return text.split(' · ').map(part => translate(part, selected)).join(' · ');
+  if (text.includes(' / ')) return text.split(' / ').map(part => translate(part, selected)).join(' / ');
   return value;
 }
 
@@ -100,7 +109,7 @@ function language(): Language {
 
 function shouldSkip(node: Node) {
   const parent = node.parentElement;
-  return Boolean(parent?.closest('script,style,code,kbd,textarea,[contenteditable],.katex,[data-i18n-skip]') || (parent?.closest('pre') && !parent?.closest('button')));
+  return Boolean(parent?.closest('script,style,code,kbd,textarea,[contenteditable],.katex,[data-i18n-skip]') || (parent?.closest('pre') && !parent?.closest('button, pre.mermaid svg')));
 }
 
 function applyText(root: ParentNode, selected: Language) {

@@ -1574,6 +1574,10 @@ html[data-language="zh-CN"] {
 html[data-language="zh-CN"] :is(pre, code, kbd) {
   --font-mono: "SFMono-Regular", Consolas, monospace;
 }
+html[data-language="zh-CN"] pre button,
+html[data-language="zh-CN"] pre.mermaid svg {
+  font-family: var(--font-sans);
+}
 html[data-language="zh-CN"] .eyebrow,
 html[data-language="zh-CN"] .card-meta,
 html[data-language="zh-CN"] .card-eyebrow,

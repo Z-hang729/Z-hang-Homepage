@@ -1,4 +1,4 @@
-// Display translations for existing demonstration articles only. Keys follow
+// Display translations for existing article prose. Keys follow
 // rendered text-node boundaries around emphasis, inline code, and mathematics.
 // Source documents, formulas, code, article titles, and proper names stay intact.
 export const READING_TRANSLATIONS: Record<string, string> = {
@@ -98,8 +98,7 @@ export const READING_TRANSLATIONS: Record<string, string> = {
   "TODO: replace this page with an actual repository, screenshots, instructions, and known limitations. Store large datasets in an appropriate external archive and keep their metadata here.": "待办：用实际代码仓库、截图、使用说明和已知局限替换本页。将大型数据集存入合适的外部档案库，并在这里保留其元数据。",
   "A demonstration project template for organizing configuration, provenance, code, and derived figures.": "一份项目模板示例，用于组织配置、来源信息、代码和衍生图表。",
 
-  // Space Plasma Physics demonstration course notebook. The real
-  // Electromagnetism source document is deliberately not included here.
+  // Space Plasma Physics demonstration course notebook.
   "Notebook map": "笔记导览",
   "illustrates a course archive; the semester and progress bar are sample metadata, not a verified enrollment or completed course record. Topics can be expanded into separate lecture files after a folder import.": "展示了课程档案的组织方式；学期和进度条仅为示例元数据，并非经过核验的选课或结课记录。导入文件夹后，各主题可以扩展为独立的讲义文件。",
   "Topic": "主题",
@@ -144,6 +143,31 @@ export const READING_TRANSLATIONS: Record<string, string> = {
   "A model-building workflow": "模型构建流程",
   "This conceptual flow illustrates Mermaid support. Each physical model requires its own assumptions and validation.": "此概念流程图展示 Mermaid 支持。每一个物理模型都需要独立说明其假设，并进行验证。",
   "A demonstration course notebook on shielding, collective behavior, and the assumptions behind simple plasma models.": "一份课程笔记示例，讨论屏蔽、集体行为与简单等离子体模型背后的假设。",
+
+  // English explanatory passages in Electromagnetism. The course title,
+  // existing Chinese prose, mathematical expressions, and source stay intact.
+  "Maxwell equations": "Maxwell 方程",
+  "This is local charge conservation. The displacement-current term is essential when charge density changes in time.": "这就是局域电荷守恒。当电荷密度随时间变化时，位移电流项不可或缺。",
+  "Phasor convention": "相量约定",
+  "Fix the convention before transforming time derivatives:": "在变换时间导数之前，先确定相量约定：",
+  "Then": "那么",
+  ", and": "，并有",
+  "Changing to": "改用",
+  "changes these imaginary signs. Physical real fields are unchanged when the entire convention is transformed consistently.": "会改变这些虚数项的符号。只要整套约定得到一致转换，物理实场就保持不变。",
+  "Plane-wave check": "平面波检验",
+  "In a source-free homogeneous vacuum, take": "在无源的均匀真空中，取",
+  ". The curl equations imply": "。旋度方程给出",
+  "Thus": "因此",
+  "and": "，且",
+  "for a plane wave. Check propagation direction with": "（对于平面波）。应借助",
+  ", not only by inspecting a complex exponential.": "判断传播方向，而不能只检查复指数。",
+  "Review questions": "复习问题",
+  "Derive charge conservation from Maxwell equations.": "从 Maxwell 方程推导电荷守恒。",
+  "Explain why": "说明为什么仅凭",
+  "alone does not imply": "并不能推出",
+  "Write the phasor curl equations using the opposite time convention and verify that a plane wave still propagates at": "用相反的时间约定写出相量形式的旋度方程，并验证平面波仍以速度",
+  "Course archive": "课程档案",
+  "TODO: add actual lecture notes and homework discussions. Metadata, attachments, and references can be edited without changing page components.": "待办：添加实际讲义与作业讨论。元数据、附件和参考资料可以直接编辑，无需修改页面组件。",
 
   // Mermaid labels become ordinary reader-visible text after rendering.
   "Preserve originals": "保留原始文件",
