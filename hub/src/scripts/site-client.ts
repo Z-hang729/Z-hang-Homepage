@@ -116,6 +116,22 @@ async function openSearch(event?: Event) {
     const PF = (window as any).PagefindUI;
     new PF({
       element: "#global-search",
+      // Keep a stable source language so the shared switch can restore every
+      // label even when search is first opened while the page is Chinese.
+      translations: {
+        placeholder: "Search", clear_search: "Clear", load_more: "Load more results",
+        search_label: "Search this site", filters_label: "Filters",
+        zero_results: "No results for [SEARCH_TERM]", many_results: "[COUNT] results for [SEARCH_TERM]",
+        one_result: "[COUNT] result for [SEARCH_TERM]", total_zero_results: "No results",
+        total_one_result: "[COUNT] result", total_many_results: "[COUNT] results",
+        alt_search: "No results for [SEARCH_TERM]. Showing results for [DIFFERENT_TERM] instead",
+        search_suggestion: "No results for [SEARCH_TERM]. Try one of the following searches:",
+        searching: "Searching for [SEARCH_TERM]...", results_label: "Search results",
+        keyboard_navigate: "navigate", keyboard_select: "select", keyboard_clear: "clear",
+        keyboard_close: "close", keyboard_search: "search", error_search: "Search failed",
+        filter_selected_one: "[COUNT] selected", filter_selected_many: "[COUNT] selected",
+        input_hint: "Results will appear as you type", loading: "Loading",
+      },
       showSubResults: true,
       showImages: false,
       processResult: decorateSearchResult,

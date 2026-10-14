@@ -10,8 +10,24 @@ for (const root of roots) {
   const defaultOption = root.dataset.defaultAnimation || 'solar-wind';
   let renderScene;
   let loading;
+  let selectionToken = 0;
+  let renderedId;
 
-  const optionLabel = (id) => options.find((option) => option.dataset.animationId === id)?.textContent?.trim() || id;
+  const isChinese = () => document.documentElement.dataset.language === 'zh-CN';
+  const optionLabel = (id) => {
+    const option = options.find((item) => item.dataset.animationId === id);
+    return option ? ((isChinese() ? option.dataset.labelZh : option.dataset.labelEn) || option.textContent?.trim() || id) : id;
+  };
+  const optionDescription = (id) => {
+    const option = options.find((item) => item.dataset.animationId === id);
+    return option ? ((isChinese() ? option.dataset.descriptionZh : option.dataset.descriptionEn) || '') : '';
+  };
+  const updateOptionLabels = () => options.forEach((option) => {
+    const label = option.querySelector('[data-animation-label]');
+    if (label) label.textContent = (isChinese() ? option.dataset.labelZh : option.dataset.labelEn) || label.textContent || '';
+    option.setAttribute('aria-label', `${optionLabel(option.dataset.animationId || '')}: ${optionDescription(option.dataset.animationId || '')}`);
+    option.setAttribute('title', optionDescription(option.dataset.animationId || ''));
+  });
   const setSelected = (id) => {
     for (const option of options) option.setAttribute('aria-pressed', String(option.dataset.animationId === id));
   };
@@ -25,15 +41,16 @@ for (const root of roots) {
   const updateStatus = (id) => {
     if (!status) return;
     const isMobile = window.matchMedia?.('(max-width: 720px)').matches;
-    status.textContent = id === 'solar-wind' || !isMobile
-      ? `${optionLabel(id)} selected. Click another label to explore.`
-      : `${optionLabel(id)} selected. A static Solar Wind illustration is shown on small screens.`;
+    status.textContent = isChinese()
+      ? (id === 'solar-wind' || !isMobile ? `${optionLabel(id)}已选中。点击其他标签继续探索。` : `${optionLabel(id)}已选中。小屏幕显示静态太阳风插图。`)
+      : (id === 'solar-wind' || !isMobile ? `${optionLabel(id)} selected. Click another label to explore.` : `${optionLabel(id)} selected. A static Solar Wind illustration is shown on small screens.`);
   };
   const loadRenderer = async () => {
     if (!loading) loading = import('./hero-animation-variants.js').then((module) => { renderScene = module.renderHeroAnimation; return renderScene; });
     return loading;
   };
   const choose = async (id) => {
+    const token = ++selectionToken;
     if (!id || id === 'solar-wind') {
       setSelected('solar-wind');
       showFallback('solar-wind');
@@ -46,22 +63,30 @@ for (const root of roots) {
     if (!dynamic || dynamic.hidden) return;
     try {
       const renderer = await loadRenderer();
-      renderer?.(id, dynamic, { reducedMotion: prefersReducedMotion() });
+      if (token !== selectionToken) return;
+      if (renderer?.(id, dynamic, { reducedMotion: prefersReducedMotion() })) renderedId = id;
     } catch (error) {
+      if (token !== selectionToken) return;
       // The base illustration remains useful if an optional scene chunk fails.
       console.warn('Hero animation scene unavailable', error);
-      if (status) status.textContent = `${optionLabel(id)} is unavailable; showing Solar Wind.`;
+      if (status) status.textContent = isChinese() ? `${optionLabel(id)}暂不可用，正在显示太阳风。` : `${optionLabel(id)} is unavailable; showing Solar Wind.`;
       setSelected('solar-wind');
       showFallback('solar-wind');
     }
   };
 
   for (const option of options) option.addEventListener('click', () => choose(option.dataset.animationId));
+  updateOptionLabels();
+  document.addEventListener('zh-language-change', () => {
+    updateOptionLabels();
+    updateStatus(options.find((option) => option.getAttribute('aria-pressed') === 'true')?.dataset.animationId || 'solar-wind');
+  });
   choose(defaultOption);
   window.addEventListener('resize', () => {
     const selectedId = options.find((option) => option.getAttribute('aria-pressed') === 'true')?.dataset.animationId || 'solar-wind';
     showFallback(selectedId);
     updateStatus(selectedId);
+    if (selectedId !== 'solar-wind' && dynamic && !dynamic.hidden && renderedId !== selectedId) choose(selectedId);
   }, { passive: true });
 }
 

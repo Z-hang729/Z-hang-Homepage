@@ -215,6 +215,22 @@ img {
   background: var(--accent-soft);
   border-radius: 5px;
 }
+.language-toggle {
+  min-width: 54px;
+  min-height: 34px;
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--muted);
+  font: 11px var(--font-mono);
+}
+.language-toggle:hover,
+.language-toggle[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
 .search-trigger {
   display: flex;
   align-items: center;
@@ -1549,4 +1565,24 @@ html[data-theme="dark"] .astro-code span {
     content: " (" attr(href) ")";
     font-size: 9px;
   }
+}
+html[data-language="zh-CN"] {
+  --font-sans: "KaiTi", "STKaiti", "DFKai-SB", "Microsoft JhengHei", serif;
+  --font-serif: "KaiTi", "STKaiti", "DFKai-SB", serif;
+  --font-mono: "KaiTi", "STKaiti", "DFKai-SB", serif;
+}
+html[data-language="zh-CN"] :is(pre, code, kbd) {
+  --font-mono: "SFMono-Regular", Consolas, monospace;
+}
+html[data-language="zh-CN"] pre button,
+html[data-language="zh-CN"] pre.mermaid svg {
+  font-family: var(--font-sans);
+}
+html[data-language="zh-CN"] .eyebrow,
+html[data-language="zh-CN"] .card-meta,
+html[data-language="zh-CN"] .card-eyebrow,
+html[data-language="zh-CN"] .footer-bottom,
+html[data-language="zh-CN"] .language-toggle {
+  font-family: var(--font-sans);
+  letter-spacing: .08em;
 }
