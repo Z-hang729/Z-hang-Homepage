@@ -14,7 +14,7 @@ const mainNavigation = navigation.some(item => /^\/(?:files|library)\/?$/.test(i
 const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':current.startsWith('/research/')?'Research':current.startsWith('/notes/')?'Notes':current.startsWith('/projects/')?'Projects':current.startsWith('/files/')?'Files':current.startsWith('/figures/')?'Figures':current.startsWith('/references/')?'References':current.startsWith('/packages/')?'Research packages':current.startsWith('/activity/')?'Activity':current.startsWith('/cv/')?'CV':current.startsWith('/knowledge/')?'Knowledge map':'Website';
 ---
 <!doctype html>
-<html lang="en" data-theme="light">
+<html lang="en" data-theme="light" data-language="en" data-default-language={profile.uiLanguage || 'en'}>
   <head>
     <meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
     <meta name="color-scheme" content="light dark"/>
@@ -45,6 +45,7 @@ const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':curre
           <button class="search-trigger" data-search-open aria-controls="search-dialog" aria-expanded="false" aria-label="Search the website"><Icon name="search" size={17}/><span>Search</span><kbd>⌘ K</kbd></button>
           {profile.github && <a class="icon-button" href={profile.github} aria-label="GitHub"><Icon name="github"/></a>}
           {profile.email && <a class="icon-button" href={`mailto:${profile.email}`} aria-label="Email"><Icon name="mail"/></a>}
+          {profile.languageSwitcherEnabled !== false && <button class="language-toggle" type="button" data-language-toggle aria-label="Switch Chinese and English" title="Switch Chinese and English"><span data-language-current>中</span><span aria-hidden="true"> / </span><span>EN</span></button>}
           <button class="icon-button theme-toggle" aria-label="Switch to dark theme" title="Switch color theme"><Icon name="sun"/></button>
           <button class="icon-button menu-toggle" aria-expanded="false" aria-controls="main-nav" aria-label="Open navigation"><Icon name="menu"/></button>
         </div>
@@ -58,6 +59,7 @@ const searchType=/^\/research\/[^/]+\/logs\//.test(current)?'Research log':curre
     <dialog id="search-dialog" class="search-dialog" aria-labelledby="search-title" data-pagefind-ignore><div class="search-heading"><div><p class="eyebrow">ACROSS THE GARDEN</p><h2 id="search-title">Find an idea.</h2></div><button class="icon-button" data-search-close aria-label="Close search">×</button></div><div id="global-search"></div><p class="search-hint" id="search-hint">Search research, notes, projects, and tags. Press Esc to close.</p></dialog>
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <script>import '../scripts/site-client';</script>
+    <script>import '../scripts/i18n-client';</script>
     <script>import '../scripts/owner-bootstrap';</script>
   </body>
 </html>

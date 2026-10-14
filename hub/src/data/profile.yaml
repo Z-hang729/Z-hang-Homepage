@@ -4,7 +4,7 @@ uiLanguage: en
 supportedLanguages:
   - en
   - zh-CN
-languageSwitcherEnabled: false
+languageSwitcherEnabled: true
 tagline: ""
 heroFirstLine: Between the
 heroSecondLine: Sun & the code.

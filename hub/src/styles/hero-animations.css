@@ -266,3 +266,13 @@
   }
 }
 
+html[data-language="zh-CN"] .hero-animation-picker-label,
+html[data-language="zh-CN"] .hero-animation-option,
+html[data-language="zh-CN"] .hero-animation-status,
+html[data-language="zh-CN"] .hero-animation-note,
+html[data-language="zh-CN"] .hero-animation-scene text,
+html[data-language="zh-CN"] .magnetosphere-visual text {
+  font-family: "KaiTi", "STKaiti", "DFKai-SB", "Microsoft JhengHei", serif;
+  letter-spacing: .08em;
+}
+

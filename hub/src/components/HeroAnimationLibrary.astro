@@ -35,10 +35,14 @@ const selected = animations.some((animation) => animation.id === defaultAnimatio
           data-animation-id={animation.id}
           aria-pressed={animation.id === selected ? 'true' : 'false'}
           aria-label={`${animation.label}: ${animation.description}`}
+          data-label-en={animation.shortLabel}
+          data-label-zh={animation.shortLabelZh}
+          data-description-en={animation.description}
+          data-description-zh={animation.descriptionZh}
           title={animation.description}
         >
           <span class="hero-animation-dot" aria-hidden="true"></span>
-          <span>{animation.shortLabel}</span>
+          <span data-animation-label>{animation.shortLabel}</span>
         </button>
       ))}
     </div>
